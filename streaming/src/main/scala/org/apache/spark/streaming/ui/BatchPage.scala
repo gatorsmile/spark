@@ -25,8 +25,8 @@ import org.apache.commons.lang3.StringEscapeUtils
 
 import org.apache.spark.streaming.Time
 import org.apache.spark.streaming.ui.StreamingJobProgressListener.{OutputOpId, SparkJobId}
-import org.apache.spark.ui.jobs.UIData.JobUIData
 import org.apache.spark.ui.{UIUtils => SparkUIUtils, WebUIPage}
+import org.apache.spark.ui.jobs.UIData.JobUIData
 
 private[ui] case class SparkJobIdWithUIData(sparkJobId: SparkJobId, jobUIData: Option[JobUIData])
 
@@ -37,10 +37,10 @@ private[ui] class BatchPage(parent: StreamingTab) extends WebUIPage("batch") {
   private def columns: Seq[Node] = {
     <th>Output Op Id</th>
       <th>Description</th>
-      <th>Duration</th>
+      <th>Output Op Duration</th>
       <th>Status</th>
       <th>Job Id</th>
-      <th>Duration</th>
+      <th>Job Duration</th>
       <th class="sorttable_nosort">Stages: Succeeded/Total</th>
       <th class="sorttable_nosort">Tasks (for all stages): Succeeded/Total</th>
       <th>Error</th>

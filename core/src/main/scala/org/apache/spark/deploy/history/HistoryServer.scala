@@ -21,8 +21,11 @@ import java.util.NoSuchElementException
 import java.util.zip.ZipOutputStream
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 
+import scala.util.control.NonFatal
+
 import com.google.common.cache._
 import org.eclipse.jetty.servlet.{ServletContextHandler, ServletHolder}
+
 import org.apache.spark.{Logging, SecurityManager, SparkConf}
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.status.api.v1.{ApiRootResource, ApplicationInfo, ApplicationsListResource, UIRoot}
@@ -46,7 +49,8 @@ class HistoryServer(
     provider: ApplicationHistoryProvider,
     securityManager: SecurityManager,
     port: Int)
-  extends WebUI(securityManager, port, conf) with Logging with UIRoot {
+  extends WebUI(securityManager, securityManager.getSSLOptions("historyServer"), port, conf)
+  with Logging with UIRoot {
 
   // How many applications to retain
   private val retainedApplications = conf.getInt("spark.history.retainedApplications", 50)
@@ -113,7 +117,17 @@ class HistoryServer(
   }
 
   def getSparkUI(appKey: String): Option[SparkUI] = {
-    Option(appCache.get(appKey))
+    try {
+      val ui = appCache.get(appKey)
+      Some(ui)
+    } catch {
+      case NonFatal(e) => e.getCause() match {
+        case nsee: NoSuchElementException =>
+          None
+
+        case cause: Exception => throw cause
+      }
+    }
   }
 
   initialize()
@@ -193,7 +207,7 @@ class HistoryServer(
       appCache.get(appId + attemptId.map { id => s"/$id" }.getOrElse(""))
       true
     } catch {
-      case e: Exception => e.getCause() match {
+      case NonFatal(e) => e.getCause() match {
         case nsee: NoSuchElementException =>
           false
 
@@ -220,7 +234,7 @@ object HistoryServer extends Logging {
 
   val UI_PATH_PREFIX = "/history"
 
-  def main(argStrings: Array[String]) {
+  def main(argStrings: Array[String]): Unit = {
     Utils.initDaemon(log)
     new HistoryServerArguments(conf, argStrings)
     initSecurity()
