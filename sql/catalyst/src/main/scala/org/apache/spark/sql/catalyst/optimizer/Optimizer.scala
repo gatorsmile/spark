@@ -921,12 +921,15 @@ object PushPredicateThroughJoin extends Rule[LogicalPlan] with PredicateHelper {
     case f @ Filter(filterCondition, Join(left, right, joinType, joinCondition)) =>
       val (leftFilterConditions, rightFilterConditions, commonFilterCondition) =
         split(splitConjunctivePredicates(filterCondition), left, right)
+      val (_, _, commonJoinCondition) =
+        split(joinCondition.map(splitConjunctivePredicates).getOrElse(Nil), left, right)
+      val commonCondition = commonJoinCondition ++ commonFilterCondition
       val leftInferredFilterConditions =
         (leftFilterConditions ++
-           inferConditions(rightFilterConditions, right.outputSet, commonFilterCondition)).distinct
+          inferConditions(rightFilterConditions, right.outputSet, commonCondition)).distinct
       val rightInferredFilterConditions =
         (rightFilterConditions ++
-          inferConditions(leftFilterConditions, left.outputSet, commonFilterCondition)).distinct
+          inferConditions(leftFilterConditions, left.outputSet, commonCondition)).distinct
 
       joinType match {
         case Inner =>
