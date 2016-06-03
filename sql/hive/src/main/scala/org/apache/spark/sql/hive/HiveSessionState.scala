@@ -64,7 +64,7 @@ private[hive] class HiveSessionState(sparkSession: SparkSession)
 
       override val extendedResolutionRules =
         new ConvertMetastoreTables(sparkSession) ::
-        CreateTables ::
+        new CreateTables(sparkSession) ::
         PreInsertionCasts ::
         PreInsertCastAndRename ::
         DataSourceAnalysis ::
@@ -117,6 +117,25 @@ private[hive] class HiveSessionState(sparkSession: SparkSession)
    */
   def convertMetastoreParquet: Boolean = {
     conf.getConf(HiveUtils.CONVERT_METASTORE_PARQUET)
+  }
+
+  /**
+   * When true, also tries to merge possibly different but compatible Parquet schemas in different
+   * Parquet data files.
+   *
+   * This configuration is only effective when "spark.sql.hive.convertMetastoreParquet" is true.
+   */
+  def convertMetastoreParquetWithSchemaMerging: Boolean = {
+    conf.getConf(HiveUtils.CONVERT_METASTORE_PARQUET_WITH_SCHEMA_MERGING)
+  }
+
+  /**
+   * When true, enables an experimental feature where metastore tables that use the Orc SerDe
+   * are automatically converted to use the Spark SQL ORC table scan, instead of the Hive
+   * SerDe.
+   */
+  def convertMetastoreOrc: Boolean = {
+    conf.getConf(HiveUtils.CONVERT_METASTORE_ORC)
   }
 
   /**

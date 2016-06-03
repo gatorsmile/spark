@@ -95,7 +95,7 @@ private[hive] trait HiveStrategies {
  * Creates any tables required for query execution.
  * For example, because of a CREATE TABLE X AS statement.
  */
-private[hive] object CreateTables extends Rule[LogicalPlan] {
+private[hive] class CreateTables(sparkSession: SparkSession) extends Rule[LogicalPlan] {
 
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     // Wait until children are resolved.
@@ -111,8 +111,11 @@ private[hive] object CreateTables extends Rule[LogicalPlan] {
         table
       }
 
+      val catalog = sparkSession.sessionState.catalog
+      val db = table.identifier.database.getOrElse(catalog.getCurrentDatabase).toLowerCase
+
       execution.CreateHiveTableAsSelectCommand(
-        desc,
+        desc.copy(identifier = TableIdentifier(table.identifier.table, Some(db))),
         child,
         allowExisting)
   }
