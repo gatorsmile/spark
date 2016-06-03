@@ -17,25 +17,33 @@
 
 package org.apache.spark.sql.hive
 
+import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 import scala.util.control.NonFatal
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.ql.exec.{UDAF, UDF}
 import org.apache.hadoop.hive.ql.exec.{FunctionRegistry => HiveFunctionRegistry}
 import org.apache.hadoop.hive.ql.udf.generic.{AbstractGenericUDAFResolver, GenericUDF, GenericUDTF}
 
 import org.apache.spark.sql.{AnalysisException, SparkSession}
-import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.{FunctionIdentifier, InternalRow, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.FunctionRegistry
 import org.apache.spark.sql.catalyst.analysis.FunctionRegistry.FunctionBuilder
-import org.apache.spark.sql.catalyst.catalog.{FunctionResourceLoader, SessionCatalog}
-import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, FunctionResourceLoader, SessionCatalog}
+import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.logical
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoTable, LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.command.CreateHiveTableAsSelectLogicalPlan
+import org.apache.spark.sql.execution.datasources._
+import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.HiveShim.HiveFunctionWrapper
 import org.apache.spark.sql.hive.client.HiveClient
+import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.Utils
 
 
@@ -84,17 +92,20 @@ private[sql] class HiveSessionCatalog(
   // and HiveCatalog. We should still do it at some point...
   private val metastoreCatalog = new HiveMetastoreCatalog(sparkSession)
 
-  val ParquetConversions: Rule[LogicalPlan] = metastoreCatalog.ParquetConversions
-  val OrcConversions: Rule[LogicalPlan] = metastoreCatalog.OrcConversions
-  val CreateTables: Rule[LogicalPlan] = metastoreCatalog.CreateTables
-  val PreInsertionCasts: Rule[LogicalPlan] = metastoreCatalog.PreInsertionCasts
-
   override def refreshTable(name: TableIdentifier): Unit = {
     metastoreCatalog.refreshTable(name)
   }
 
   override def invalidateTable(name: TableIdentifier): Unit = {
     metastoreCatalog.invalidateTable(name)
+  }
+
+  override def putCached(name: TableIdentifier, plan: LogicalPlan): Unit = {
+    metastoreCatalog.putTable(name, plan)
+  }
+
+  override def getCached(name: TableIdentifier): Option[LogicalPlan] = {
+    metastoreCatalog.getRelationOption(name)
   }
 
   def invalidateCache(): Unit = {
@@ -222,4 +233,5 @@ private[sql] class HiveSessionCatalog(
         }
     }
   }
+
 }
