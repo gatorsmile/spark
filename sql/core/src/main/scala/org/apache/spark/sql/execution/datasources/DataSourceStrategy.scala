@@ -84,20 +84,13 @@ private[sql] object DataSourceAnalysis extends Rule[LogicalPlan] {
  * source information.
  */
 private[sql] class FindDataSourceTable(sparkSession: SparkSession) extends Rule[LogicalPlan] {
-  private def readDataSourceTable(sparkSession: SparkSession, table: CatalogTable): LogicalPlan = {
-    val dataSource = DDLUtils.getDataSourceTable(sparkSession, table)
-    LogicalRelation(
-      dataSource.resolveRelation(checkPathExist = true),
-      metastoreTableIdentifier = Some(table.identifier))
-  }
-
   override def apply(plan: LogicalPlan): LogicalPlan = plan transform {
     case i @ logical.InsertIntoTable(s: SimpleCatalogRelation, _, _, _, _)
         if DDLUtils.isDatasourceTable(s.metadata) =>
-      i.copy(table = readDataSourceTable(sparkSession, s.metadata))
+      i.copy(table = CreateDataSourceTableUtils.readDataSourceTable(sparkSession, s.metadata))
 
     case s: SimpleCatalogRelation if DDLUtils.isDatasourceTable(s.metadata) =>
-      readDataSourceTable(sparkSession, s.metadata)
+      CreateDataSourceTableUtils.readDataSourceTable(sparkSession, s.metadata)
   }
 }
 
