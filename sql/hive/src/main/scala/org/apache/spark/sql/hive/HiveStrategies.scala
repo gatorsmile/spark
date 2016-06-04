@@ -425,3 +425,35 @@ private[hive] case class InsertIntoHiveTable(
     case (childAttr, tableAttr) => childAttr.dataType.sameType(tableAttr.dataType)
   }
 }
+
+/**
+ * An override of the standard HDFS listing based catalog, that overrides the partition spec with
+ * the information from the metastore.
+ *
+ * @param tableBasePath The default base path of the Hive metastore table
+ * @param partitionSpec The partition specifications from Hive metastore
+ */
+private[hive] class MetaStorePartitionedTableFileCatalog(
+    sparkSession: SparkSession,
+    tableBasePath: Path,
+    override val partitionSpec: PartitionSpec)
+  extends ListingFileCatalog(
+    sparkSession,
+    MetaStorePartitionedTableFileCatalog.getPaths(tableBasePath, partitionSpec),
+    Map.empty,
+    Some(partitionSpec.partitionColumns)) {
+}
+
+private[hive] object MetaStorePartitionedTableFileCatalog {
+  /** Get the list of paths to list files in the for a metastore table */
+  def getPaths(tableBasePath: Path, partitionSpec: PartitionSpec): Seq[Path] = {
+    // If there are no partitions currently specified then use base path,
+    // otherwise use the paths corresponding to the partitions.
+    if (partitionSpec.partitions.isEmpty) {
+      Seq(tableBasePath)
+    } else {
+      partitionSpec.partitions.map(_.path)
+    }
+  }
+}
+

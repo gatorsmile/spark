@@ -140,6 +140,8 @@ case class CatalogTable(
       locationUri, inputFormat, outputFormat, serde, compressed, serdeProperties))
   }
 
+
+
 }
 
 

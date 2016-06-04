@@ -85,27 +85,9 @@ private[sql] object DataSourceAnalysis extends Rule[LogicalPlan] {
  */
 private[sql] class FindDataSourceTable(sparkSession: SparkSession) extends Rule[LogicalPlan] {
   private def readDataSourceTable(sparkSession: SparkSession, table: CatalogTable): LogicalPlan = {
-    val userSpecifiedSchema = DDLUtils.getSchemaFromTableProperties(table)
-
-    // We only need names at here since userSpecifiedSchema we loaded from the metastore
-    // contains partition columns. We can always get datatypes of partitioning columns
-    // from userSpecifiedSchema.
-    val partitionColumns = DDLUtils.getPartitionColumnsFromTableProperties(table)
-
-    val bucketSpec = DDLUtils.getBucketSpecFromTableProperties(table)
-
-    val options = table.storage.serdeProperties
-    val dataSource =
-      DataSource(
-        sparkSession,
-        userSpecifiedSchema = userSpecifiedSchema,
-        partitionColumns = partitionColumns,
-        bucketSpec = bucketSpec,
-        className = table.properties(CreateDataSourceTableUtils.DATASOURCE_PROVIDER),
-        options = options)
-
+    val dataSource = DDLUtils.getDataSourceTable(sparkSession, table)
     LogicalRelation(
-      dataSource.resolveRelation(),
+      dataSource.resolveRelation(checkPathExist = true),
       metastoreTableIdentifier = Some(table.identifier))
   }
 
