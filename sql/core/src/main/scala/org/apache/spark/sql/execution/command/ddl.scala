@@ -26,7 +26,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, CatalogTabl
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.execution.command.CreateDataSourceTableUtils._
-import org.apache.spark.sql.execution.datasources.BucketSpec
+import org.apache.spark.sql.execution.datasources.{BucketSpec, DataSource}
 import org.apache.spark.sql.types._
 
 
@@ -578,5 +578,26 @@ object DDLUtils {
     } else {
       None
     }
+  }
+
+  def getDataSource(sparkSession: SparkSession, table: CatalogTable): DataSource = {
+    val userSpecifiedSchema = getSchemaFromTableProperties(table)
+
+    // We only need names at here since userSpecifiedSchema we loaded from the metastore
+    // contains partition columns. We can always get datatypes of partitioning columns
+    // from userSpecifiedSchema.
+    val partitionColumns = getPartitionColumnsFromTableProperties(table)
+
+    val bucketSpec = getBucketSpecFromTableProperties(table)
+
+    val options = table.storage.serdeProperties
+
+    DataSource(
+      sparkSession,
+      userSpecifiedSchema = userSpecifiedSchema,
+      partitionColumns = partitionColumns,
+      bucketSpec = bucketSpec,
+      className = table.properties(CreateDataSourceTableUtils.DATASOURCE_PROVIDER),
+      options = options)
   }
 }
