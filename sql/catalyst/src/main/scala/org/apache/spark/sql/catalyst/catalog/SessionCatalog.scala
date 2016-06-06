@@ -475,6 +475,16 @@ class SessionCatalog(
   def invalidateTable(name: TableIdentifier): Unit = { /* no-op */ }
 
   /**
+   * Put the cache entry for a metastore table, if any.
+   */
+  def putCached(name: TableIdentifier, plan: LogicalPlan): Unit = { /* no-op */ }
+
+  /**
+   * Get the cache entry for a metastore table, if any.
+   */
+  def getCached(name: TableIdentifier): Option[LogicalPlan] = { None }
+
+  /**
    * Drop all existing temporary tables.
    * For testing only.
    */

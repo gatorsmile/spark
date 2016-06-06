@@ -487,4 +487,29 @@ object CreateDataSourceTableUtils extends Logging {
         sparkSession.sessionState.catalog.createTable(table, ignoreIfExists = false)
     }
   }
+
+  def readDataSourceTable(sparkSession: SparkSession, table: CatalogTable): LogicalRelation = {
+    val userSpecifiedSchema = DDLUtils.getSchemaFromTableProperties(table)
+
+    // We only need names at here since userSpecifiedSchema we loaded from the metastore
+    // contains partition columns. We can always get datatypes of partitioning columns
+    // from userSpecifiedSchema.
+    val partitionColumns = DDLUtils.getPartitionColumnsFromTableProperties(table)
+
+    val bucketSpec = DDLUtils.getBucketSpecFromTableProperties(table)
+
+    val options = table.storage.serdeProperties
+
+    val dataSource = DataSource(
+      sparkSession,
+      userSpecifiedSchema = userSpecifiedSchema,
+      partitionColumns = partitionColumns,
+      bucketSpec = bucketSpec,
+      className = table.properties(CreateDataSourceTableUtils.DATASOURCE_PROVIDER),
+      options = options)
+
+    LogicalRelation(
+      dataSource.resolveRelation(checkPathExist = true),
+      metastoreTableIdentifier = Some(table.identifier))
+  }
 }

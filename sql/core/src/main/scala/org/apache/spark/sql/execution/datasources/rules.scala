@@ -33,31 +33,37 @@ import org.apache.spark.sql.sources.{BaseRelation, InsertableRelation}
  * Try to replaces [[UnresolvedRelation]]s with [[ResolveDataSource]].
  */
 private[sql] class ResolveDataSource(sparkSession: SparkSession) extends Rule[LogicalPlan] {
-  def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
-    case u: UnresolvedRelation if u.tableIdentifier.database.isDefined =>
-      try {
-        val dataSource = DataSource(
-          sparkSession,
-          paths = u.tableIdentifier.table :: Nil,
-          className = u.tableIdentifier.database.get)
+  def apply(plan: LogicalPlan): LogicalPlan = {
+    if (!sparkSession.conf.get(SQLConf.RUN_SQL_ON_FILES)) {
+      return plan
+    }
 
-        val notSupportDirectQuery = try {
-          !classOf[FileFormat].isAssignableFrom(dataSource.providingClass)
+    plan resolveOperators {
+      case u: UnresolvedRelation if u.tableIdentifier.database.isDefined =>
+        try {
+          val dataSource = DataSource(
+            sparkSession,
+            paths = u.tableIdentifier.table :: Nil,
+            className = u.tableIdentifier.database.get)
+
+          val notSupportDirectQuery = try {
+            !classOf[FileFormat].isAssignableFrom(dataSource.providingClass)
+          } catch {
+            case NonFatal(e) => false
+          }
+          if (notSupportDirectQuery) {
+            throw new AnalysisException("Unsupported data source type for direct query on files: " +
+              s"${u.tableIdentifier.database.get}")
+          }
+          val plan = LogicalRelation(dataSource.resolveRelation())
+          u.alias.map(a => SubqueryAlias(u.alias.get, plan)).getOrElse(plan)
         } catch {
-          case NonFatal(e) => false
+          case e: ClassNotFoundException => u
+          case e: Exception =>
+            // the provider is valid, but failed to create a logical plan
+            u.failAnalysis(e.getMessage)
         }
-        if (notSupportDirectQuery) {
-          throw new AnalysisException("Unsupported data source type for direct query on files: " +
-            s"${u.tableIdentifier.database.get}")
-        }
-        val plan = LogicalRelation(dataSource.resolveRelation())
-        u.alias.map(a => SubqueryAlias(u.alias.get, plan)).getOrElse(plan)
-      } catch {
-        case e: ClassNotFoundException => u
-        case e: Exception =>
-          // the provider is valid, but failed to create a logical plan
-          u.failAnalysis(e.getMessage)
-      }
+    }
   }
 }
 
