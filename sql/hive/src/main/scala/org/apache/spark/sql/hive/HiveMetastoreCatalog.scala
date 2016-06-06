@@ -32,9 +32,9 @@ private[hive] class HiveMetastoreCatalog(sparkSession: SparkSession) extends Log
   private val sessionState = sparkSession.sessionState
 
   /** A fully qualified identifier for a table (i.e., database.tableName) */
-  case class QualifiedTableName(database: String, name: String)
+  private case class QualifiedTableName(database: String, name: String)
 
-  def getQualifiedTableName(tableIdent: TableIdentifier): QualifiedTableName = {
+  private def getQualifiedTableName(tableIdent: TableIdentifier): QualifiedTableName = {
     QualifiedTableName(
       tableIdent.database.getOrElse(sessionState.catalog.getCurrentDatabase).toLowerCase,
       tableIdent.table.toLowerCase)
@@ -47,17 +47,21 @@ private[hive] class HiveMetastoreCatalog(sparkSession: SparkSession) extends Log
         logDebug(s"Creating new cached data source for $in")
         val tableMetadata =
           sessionState.catalog.getTableMetadata(TableIdentifier(in.name, Some(in.database)))
-        CreateDataSourceTableUtils.readDataSourceTable(sparkSession, tableMetadata)
+        CreateDataSourceTableUtils.buildDataSourceTableForRead(sparkSession, tableMetadata)
       }
     }
     CacheBuilder.newBuilder().maximumSize(1000).build(cacheLoader)
   }
 
-  def putTable(tableIdent: TableIdentifier, plan: LogicalPlan): Unit = {
+  /**
+   * Data Source Table is inserted directly, using Cache.put.
+   * Note, this is not using automatic cache loading.
+   */
+  def cacheTable(tableIdent: TableIdentifier, plan: LogicalPlan): Unit = {
     cachedDataSourceTables.put(getQualifiedTableName(tableIdent), plan)
   }
 
-  def getTableOption(tableIdent: TableIdentifier): Option[LogicalPlan] = {
+  def getTableIfPresent(tableIdent: TableIdentifier): Option[LogicalPlan] = {
     cachedDataSourceTables.getIfPresent(getQualifiedTableName(tableIdent)) match {
       case null => None // Cache miss
       case o: LogicalPlan => Option(o.asInstanceOf[LogicalPlan])
@@ -65,7 +69,7 @@ private[hive] class HiveMetastoreCatalog(sparkSession: SparkSession) extends Log
   }
 
   def getTable(tableIdent: TableIdentifier): LogicalPlan = {
-    cachedDataSourceTables(getQualifiedTableName(tableIdent))
+    cachedDataSourceTables.get(getQualifiedTableName(tableIdent))
   }
 
   def refreshTable(tableIdent: TableIdentifier): Unit = {

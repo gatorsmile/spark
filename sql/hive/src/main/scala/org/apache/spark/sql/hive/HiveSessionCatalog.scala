@@ -114,27 +114,22 @@ private[sql] class HiveSessionCatalog(
     metastoreCatalog.invalidateTable(name)
   }
 
-  override def putCached(name: TableIdentifier, plan: LogicalPlan): Unit = {
-    metastoreCatalog.putTable(name, plan)
-  }
-
-  override def getCached(name: TableIdentifier): Option[LogicalPlan] = {
-    metastoreCatalog.getTableOption(name)
-  }
-
-  def invalidateCache(): Unit = {
+  override def invalidateAll(): Unit = {
     metastoreCatalog.invalidateAll()
+  }
+
+  override def cacheDataSourceTable(name: TableIdentifier, plan: LogicalPlan): Unit = {
+    metastoreCatalog.cacheTable(name, plan)
+  }
+
+  override def getCachedDataSourceTableIfPresent(name: TableIdentifier): Option[LogicalPlan] = {
+    metastoreCatalog.getTableIfPresent(name)
   }
 
   def hiveDefaultTableFilePath(name: TableIdentifier): String = {
     // Code based on: hiveWarehouse.getTablePath(currentDatabase, tableName)
     val dbName = name.database.getOrElse(getCurrentDatabase)
     new Path(new Path(getDatabaseMetadata(dbName).locationUri), name.table).toString
-  }
-
-  // For testing only
-  private[hive] def getCachedDataSourceTable(table: TableIdentifier): Option[LogicalPlan] = {
-    metastoreCatalog.getTableOption(table)
   }
 
   override def makeFunctionBuilder(funcName: String, className: String): FunctionBuilder = {

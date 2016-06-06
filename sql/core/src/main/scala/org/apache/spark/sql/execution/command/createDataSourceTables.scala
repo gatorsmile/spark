@@ -488,7 +488,9 @@ object CreateDataSourceTableUtils extends Logging {
     }
   }
 
-  def readDataSourceTable(sparkSession: SparkSession, table: CatalogTable): LogicalRelation = {
+  def buildDataSourceTableForRead(
+      sparkSession: SparkSession,
+      table: CatalogTable): LogicalRelation = {
     val userSpecifiedSchema = DDLUtils.getSchemaFromTableProperties(table)
 
     // We only need names at here since userSpecifiedSchema we loaded from the metastore

@@ -32,7 +32,7 @@ import org.apache.hadoop.hive.ql.plan.TableDesc
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.catalog._
-import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference, Expression}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Statistics}
 import org.apache.spark.sql.execution.FileRelation
@@ -244,5 +244,32 @@ private[hive] case class MetastoreRelation(
 
   override def newInstance(): MetastoreRelation = {
     MetastoreRelation(databaseName, tableName, alias)(catalogTable, client, sparkSession)
+  }
+}
+
+/**
+ * Logical plan node for representing insertion into Hive table.
+ * This plan ignores nullability of ArrayType, MapType, StructType unlike InsertIntoTable
+ * because Hive table doesn't have nullability for ARRAY, MAP, STRUCT types.
+ */
+private[hive] case class InsertIntoHiveTable(
+    table: MetastoreRelation,
+    partition: Map[String, Option[String]],
+    child: LogicalPlan,
+    overwrite: Boolean,
+    ifNotExists: Boolean)
+  extends LogicalPlan {
+
+  override def children: Seq[LogicalPlan] = child :: Nil
+  override def output: Seq[Attribute] = Seq.empty
+
+  val numDynamicPartitions = partition.values.count(_.isEmpty)
+
+  // This is the expected schema of the table prepared to be inserted into,
+  // including dynamic partition columns.
+  val tableOutput = table.attributes ++ table.partitionKeys.takeRight(numDynamicPartitions)
+
+  override lazy val resolved: Boolean = childrenResolved && child.output.zip(tableOutput).forall {
+    case (childAttr, tableAttr) => childAttr.dataType.sameType(tableAttr.dataType)
   }
 }

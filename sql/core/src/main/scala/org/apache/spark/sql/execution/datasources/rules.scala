@@ -74,20 +74,20 @@ private[sql] class ResolveDataSource(sparkSession: SparkSession) extends Rule[Lo
  */
 private[sql] object PreInsertCastAndRename extends Rule[LogicalPlan] {
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-      // Wait until children are resolved.
-      case p: LogicalPlan if !p.childrenResolved => p
+    // Wait until children are resolved.
+    case p: LogicalPlan if !p.childrenResolved => p
 
-      // We are inserting into an InsertableRelation or HadoopFsRelation.
-      case i @ InsertIntoTable(
+    // We are inserting into an InsertableRelation or HadoopFsRelation.
+    case i @ InsertIntoTable(
       l @ LogicalRelation(_: InsertableRelation | _: HadoopFsRelation, _, _), _, child, _, _) =>
-        // First, make sure the data to be inserted have the same number of fields with the
-        // schema of the relation.
-        if (l.output.size != child.output.size) {
-          sys.error(
-            s"$l requires that the query in the SELECT clause of the INSERT INTO/OVERWRITE " +
-              s"statement generates the same number of columns as its schema.")
-        }
-        castAndRenameChildOutput(i, l.output, child)
+      // First, make sure the data to be inserted have the same number of fields with the
+      // schema of the relation.
+      if (l.output.size != child.output.size) {
+        sys.error(
+          s"$l requires that the query in the SELECT clause of the INSERT INTO/OVERWRITE " +
+            s"statement generates the same number of columns as its schema.")
+      }
+      castAndRenameChildOutput(i, l.output, child)
   }
 
   /** If necessary, cast data types and rename fields to the expected types and names. */
