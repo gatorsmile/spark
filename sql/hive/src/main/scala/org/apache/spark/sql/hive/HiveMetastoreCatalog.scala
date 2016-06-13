@@ -47,7 +47,7 @@ private[hive] class HiveMetastoreCatalog(sparkSession: SparkSession) extends Log
         logDebug(s"Creating new cached data source for $in")
         val tableMetadata =
           sessionState.catalog.getTableMetadata(TableIdentifier(in.name, Some(in.database)))
-        CreateDataSourceTableUtils.buildDataSourceTableForRead(sparkSession, tableMetadata)
+        CreateDataSourceTableUtils.buildDataSourceTable(sparkSession, tableMetadata)
       }
     }
     CacheBuilder.newBuilder().maximumSize(1000).build(cacheLoader)

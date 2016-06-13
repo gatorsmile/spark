@@ -18,6 +18,7 @@
 package org.apache.spark.sql.catalyst.catalog
 
 import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
+import org.apache.spark.sql.catalyst.expressions.Expression
 
 
 /**
@@ -165,6 +166,11 @@ abstract class ExternalCatalog {
       db: String,
       table: String,
       partialSpec: Option[TablePartitionSpec] = None): Seq[CatalogTablePartition]
+
+  def listPartitionsByFilter(
+      db: String,
+      table: String,
+      predicates: Seq[Expression] = Nil): Seq[CatalogTablePartition]
 
   // --------------------------------------------------------------------------
   // Functions

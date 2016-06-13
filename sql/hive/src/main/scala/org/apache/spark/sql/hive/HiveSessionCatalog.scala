@@ -35,14 +35,12 @@ import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.hive.HiveShim.HiveFunctionWrapper
-import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.util.Utils
 
 
 private[sql] class HiveSessionCatalog(
     externalCatalog: HiveExternalCatalog,
-    client: HiveClient,
     sparkSession: SparkSession,
     functionResourceLoader: FunctionResourceLoader,
     functionRegistry: FunctionRegistry,
@@ -57,7 +55,7 @@ private[sql] class HiveSessionCatalog(
 
   override def setCurrentDatabase(db: String): Unit = {
     super.setCurrentDatabase(db)
-    client.setCurrentDatabase(db)
+    externalCatalog.setCurrentDatabase(db)
   }
 
   override def lookupRelation(name: TableIdentifier, alias: Option[String]): LogicalPlan = {
@@ -85,7 +83,7 @@ private[sql] class HiveSessionCatalog(
         }
       } else {
         MetastoreRelation(
-          database, table, alias)(catalogTable = metadata, client, sparkSession)
+          database, table, alias)(catalogTable = metadata, sparkSession)
       }
     } else {
       val relation = tempTables(table)

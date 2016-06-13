@@ -618,6 +618,16 @@ class SessionCatalog(
     externalCatalog.listPartitions(db, table, partialSpec)
   }
 
+  def listPartitionsByFilter(
+      tableName: TableIdentifier,
+      predicates: Seq[Expression] = Nil): Seq[CatalogTablePartition] = {
+    val db = formatDatabaseName(tableName.database.getOrElse(getCurrentDatabase))
+    val table = formatTableName(tableName.table)
+    requireDbExists(db)
+    requireTableExists(TableIdentifier(table, Option(db)))
+    externalCatalog.listPartitionsByFilter(db, table, predicates)
+  }
+
   /**
    * Verify if the input partition spec exactly matches the existing defined partition spec
    * The columns must be the same but the orders could be different.

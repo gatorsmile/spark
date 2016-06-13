@@ -36,7 +36,6 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, Attri
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Statistics}
 import org.apache.spark.sql.execution.FileRelation
-import org.apache.spark.sql.hive.client.HiveClient
 
 
 private[hive] case class MetastoreRelation(
@@ -44,7 +43,6 @@ private[hive] case class MetastoreRelation(
     tableName: String,
     alias: Option[String])
     (val catalogTable: CatalogTable,
-     @transient private val client: HiveClient,
      @transient private val sparkSession: SparkSession)
   extends LeafNode with MultiInstanceRelation with FileRelation with CatalogRelation {
 
@@ -147,11 +145,12 @@ private[hive] case class MetastoreRelation(
 
   // When metastore partition pruning is turned off, we cache the list of all partitions to
   // mimic the behavior of Spark < 1.5
-  private lazy val allPartitions: Seq[CatalogTablePartition] = client.getPartitions(catalogTable)
+  private lazy val allPartitions: Seq[CatalogTablePartition] =
+    sparkSession.sessionState.catalog.listPartitions(catalogTable.identifier)
 
   def getHiveQlPartitions(predicates: Seq[Expression] = Nil): Seq[Partition] = {
     val rawPartitions = if (sparkSession.sessionState.conf.metastorePartitionPruning) {
-      client.getPartitionsByFilter(catalogTable, predicates)
+      sparkSession.sessionState.catalog.listPartitionsByFilter(catalogTable.identifier, predicates)
     } else {
       allPartitions
     }
@@ -229,10 +228,8 @@ private[hive] case class MetastoreRelation(
   val columnOrdinals = AttributeMap(attributes.zipWithIndex)
 
   override def inputFiles: Array[String] = {
-    val partLocations = client
-      .getPartitionsByFilter(catalogTable, Nil)
-      .flatMap(_.storage.locationUri)
-      .toArray
+    val partLocations = sparkSession.sessionState.catalog.listPartitions(catalogTable.identifier)
+      .flatMap(_.storage.locationUri).toArray
     if (partLocations.nonEmpty) {
       partLocations
     } else {
@@ -243,7 +240,7 @@ private[hive] case class MetastoreRelation(
   }
 
   override def newInstance(): MetastoreRelation = {
-    MetastoreRelation(databaseName, tableName, alias)(catalogTable, client, sparkSession)
+    MetastoreRelation(databaseName, tableName, alias)(catalogTable, sparkSession)
   }
 }
 

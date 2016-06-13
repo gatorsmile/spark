@@ -88,10 +88,10 @@ private[sql] class FindDataSourceTable(sparkSession: SparkSession) extends Rule[
     case i @ logical.InsertIntoTable(s: SimpleCatalogRelation, _, _, _, _)
         if DDLUtils.isDatasourceTable(s.metadata) =>
       i.copy(
-        table = CreateDataSourceTableUtils.buildDataSourceTableForRead(sparkSession, s.metadata))
+        table = CreateDataSourceTableUtils.buildDataSourceTable(sparkSession, s.metadata))
 
     case s: SimpleCatalogRelation if DDLUtils.isDatasourceTable(s.metadata) =>
-      CreateDataSourceTableUtils.buildDataSourceTableForRead(sparkSession, s.metadata)
+      CreateDataSourceTableUtils.buildDataSourceTable(sparkSession, s.metadata)
   }
 }
 

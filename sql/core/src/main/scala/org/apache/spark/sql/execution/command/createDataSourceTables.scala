@@ -488,7 +488,7 @@ object CreateDataSourceTableUtils extends Logging {
     }
   }
 
-  def buildDataSourceTableForRead(
+  def buildDataSourceTable(
       sparkSession: SparkSession,
       table: CatalogTable): LogicalRelation = {
     val userSpecifiedSchema = DDLUtils.getSchemaFromTableProperties(table)
