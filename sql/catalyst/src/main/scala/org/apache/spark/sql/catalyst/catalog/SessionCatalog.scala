@@ -889,6 +889,10 @@ class SessionCatalog(
   // | Other methods |
   // -----------------
 
+  def addJar(path: String): Unit = synchronized {
+    externalCatalog.addJar(path)
+  }
+
   /**
    * Drop all existing databases (except "default"), tables, partitions and functions,
    * and set the current database to "default".

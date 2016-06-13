@@ -378,4 +378,7 @@ private[spark] class HiveExternalCatalog(client: HiveClient, hadoopConf: Configu
     client.listFunctions(db, pattern)
   }
 
+  override def addJar(path: String): Unit = synchronized {
+    client.addJar(path)
+  }
 }

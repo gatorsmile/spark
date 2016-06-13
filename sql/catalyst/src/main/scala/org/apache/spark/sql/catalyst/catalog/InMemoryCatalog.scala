@@ -513,4 +513,6 @@ class InMemoryCatalog(hadoopConfig: Configuration = new Configuration) extends E
     StringUtils.filterPattern(catalog(db).functions.keysIterator.toSeq, pattern)
   }
 
+  override def addJar(path: String): Unit = { /* no-op */ }
+
 }
