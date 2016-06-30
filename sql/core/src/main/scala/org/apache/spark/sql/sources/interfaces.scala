@@ -21,6 +21,7 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.streaming.OutputMode
@@ -75,6 +76,19 @@ trait RelationProvider {
    * by the Map that is passed to the function.
    */
   def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation
+}
+
+@DeveloperApi
+trait CatalogSchemaRelationProvider {
+  /**
+   * Returns a new base relation with the given parameters.
+   * Note: the parameters' keywords are case insensitive and this insensitivity is enforced
+   * by the Map that is passed to the function.
+   */
+  def createRelation(
+      sqlContext: SQLContext,
+      parameters: Map[String, String],
+      schema: CatalogTable): BaseRelation
 }
 
 /**
