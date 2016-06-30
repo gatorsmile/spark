@@ -381,8 +381,7 @@ case class InsertIntoTable(
   override lazy val resolved: Boolean =
     childrenResolved && table.resolved && expectedColumns.forall { expected =>
     child.output.size == expected.size && child.output.zip(expected).forall {
-      case (childAttr, tableAttr) =>
-        DataType.equalsIgnoreCompatibleNullability(childAttr.dataType, tableAttr.dataType)
+      case (childAttr, tableAttr) => childAttr.dataType.sameType(tableAttr.dataType)
     }
   }
 }

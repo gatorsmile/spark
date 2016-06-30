@@ -114,7 +114,7 @@ private[sql] class SessionState(sparkSession: SparkSession) {
         PreprocessTableInsertion(conf) ::
         new FindDataSourceTable(sparkSession) ::
         DataSourceAnalysis(conf) ::
-        (if (conf.runSQLonFile) new ResolveDataSource(sparkSession) :: Nil else Nil)
+        new ResolveDataSource(sparkSession) :: Nil
 
       override val extendedCheckRules = Seq(datasources.PreWriteCheck(conf, catalog))
     }
@@ -171,6 +171,7 @@ private[sql] class SessionState(sparkSession: SparkSession) {
   }
 
   def addJar(path: String): Unit = {
+    catalog.addJar(path)
     sparkSession.sparkContext.addJar(path)
 
     val uri = new Path(path).toUri
@@ -194,5 +195,11 @@ private[sql] class SessionState(sparkSession: SparkSession) {
    */
   def analyze(tableName: String): Unit = {
     AnalyzeTableCommand(tableName).run(sparkSession)
+  }
+
+  // TODO: why do we get this from SparkConf but not SQLConf?
+  def hiveThriftServerSingleSession: Boolean = {
+    sparkSession.sparkContext.conf.getBoolean(
+      "spark.sql.hive.thriftServer.singleSession", defaultValue = false)
   }
 }
