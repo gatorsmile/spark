@@ -247,8 +247,9 @@ private[sql] object DataSourceStrategy extends Strategy with Logging {
       execution.DataSourceScanExec.create(
         l.output, toCatalystRDD(l, baseRelation.buildScan()), baseRelation) :: Nil
 
-    case i @ logical.InsertIntoTable(l @ LogicalRelation(t: InsertableRelation, _, _),
-      part, query, overwrite, false) if part.isEmpty =>
+    case i @ logical.InsertIntoTable(
+          l @ LogicalRelation(t: InsertableRelation, _, _), part, query, overwrite, false)
+        if part.isEmpty =>
       ExecutedCommandExec(InsertIntoDataSourceCommand(l, query, overwrite)) :: Nil
 
     case _ => Nil

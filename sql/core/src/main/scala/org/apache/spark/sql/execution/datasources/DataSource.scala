@@ -80,6 +80,7 @@ case class DataSource(
 
   /** A map to maintain backward compatibility in case we move data sources around. */
   private val backwardCompatibilityMap: Map[String, String] = {
+    val hive = "org.apache.spark.sql.hive.HiveRelationProvider"
     val jdbc = classOf[JdbcRelationProvider].getCanonicalName
     val json = classOf[JsonFileFormat].getCanonicalName
     val parquet = classOf[ParquetFileFormat].getCanonicalName
@@ -88,6 +89,8 @@ case class DataSource(
     val orc = "org.apache.spark.sql.hive.orc.OrcFileFormat"
 
     Map(
+      "org.apache.spark.sql.hive" -> hive,
+      "org.apache.spark.sql.hive.DefaultSource" -> hive,
       "org.apache.spark.sql.jdbc" -> jdbc,
       "org.apache.spark.sql.jdbc.DefaultSource" -> jdbc,
       "org.apache.spark.sql.execution.datasources.jdbc.DefaultSource" -> jdbc,

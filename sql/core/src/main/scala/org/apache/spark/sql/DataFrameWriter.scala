@@ -440,6 +440,16 @@ final class DataFrameWriter[T] private[sql](ds: Dataset[T]) {
     JdbcUtils.saveTable(df, url, table, props)
   }
 
+  // def hive(table: String, props: Properties): Unit = {
+  //   val dataSource = DataSource(
+  //     df.sparkSession,
+  //     className = source,
+  //     partitionColumns = partitioningColumns.getOrElse(Nil),
+  //     bucketSpec = getBucketSpec,
+  //     options = extraOptions.toMap)
+  //   dataSource.write(mode, df)
+  // }
+
   /**
    * Saves the content of the [[DataFrame]] in JSON format at the specified path.
    * This is equivalent to:

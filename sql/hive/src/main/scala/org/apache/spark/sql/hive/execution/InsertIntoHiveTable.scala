@@ -97,7 +97,7 @@ case class InsertIntoHiveTable(
     getStagingDir(new Path(extURI.getScheme, extURI.getAuthority, extURI.getPath), hadoopConf)
   }
 
-  def getExternalTmpPath(path: Path, hadoopConf: Configuration): Path = {
+  private def getExternalTmpPath(path: Path, hadoopConf: Configuration): Path = {
     val extURI: URI = path.toUri
     if (extURI.getScheme == "viewfs") {
       getExtTmpPathRelTo(path.getParent, hadoopConf)
@@ -106,7 +106,7 @@ case class InsertIntoHiveTable(
     }
   }
 
-  def getExtTmpPathRelTo(path: Path, hadoopConf: Configuration): Path = {
+  private def getExtTmpPathRelTo(path: Path, hadoopConf: Configuration): Path = {
     new Path(getStagingDir(path, hadoopConf), "-ext-10000") // Hive uses 10000
   }
 

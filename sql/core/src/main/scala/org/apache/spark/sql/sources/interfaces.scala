@@ -78,19 +78,6 @@ trait RelationProvider {
   def createRelation(sqlContext: SQLContext, parameters: Map[String, String]): BaseRelation
 }
 
-@DeveloperApi
-trait CatalogSchemaRelationProvider {
-  /**
-   * Returns a new base relation with the given parameters.
-   * Note: the parameters' keywords are case insensitive and this insensitivity is enforced
-   * by the Map that is passed to the function.
-   */
-  def createRelation(
-      sqlContext: SQLContext,
-      parameters: Map[String, String],
-      schema: CatalogTable): BaseRelation
-}
-
 /**
  * ::DeveloperApi::
  * Implemented by objects that produce relations for a specific kind of data source
