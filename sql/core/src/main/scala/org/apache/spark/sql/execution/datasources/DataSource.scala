@@ -139,6 +139,10 @@ case class DataSource(
                   provider.startsWith("org.apache.spark.sql.hive.orc")) {
                 throw new AnalysisException(
                   "The ORC data source must be used with Hive support enabled")
+              } else if (provider.toLowerCase == "hive" ||
+                  provider.startsWith("org.apache.spark.sql.hive")) {
+                throw new AnalysisException(
+                  "The Hive data source must be used with Hive support enabled")
               } else if (provider.toLowerCase == "avro" ||
                   provider == "com.databricks.spark.avro") {
                 throw new AnalysisException(

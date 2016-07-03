@@ -21,6 +21,7 @@ import scala.collection.JavaConverters._
 
 import org.scalatest.BeforeAndAfter
 
+import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.test.{TestHive, TestHiveQueryExecution}
 
 /**
@@ -153,8 +154,10 @@ class PruningSuite extends HiveComparisonTest with BeforeAndAfter {
       val (actualScannedColumns, actualPartValues) = plan.collect {
         case p @ HiveTableScanExec(columns, relation, _) =>
           val columnNames = columns.map(_.name)
+          val partitions =
+            HiveUtils.getHiveQlPartitions(TestHive.sparkSession, relation.catalogTable)
           val partValues = if (relation.catalogTable.partitionColumnNames.nonEmpty) {
-            p.prunePartitions(relation.getHiveQlPartitions()).map(_.getValues)
+            p.prunePartitions(partitions).map(_.getValues)
           } else {
             Seq.empty
           }

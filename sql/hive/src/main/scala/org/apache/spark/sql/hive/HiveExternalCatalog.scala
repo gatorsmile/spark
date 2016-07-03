@@ -23,7 +23,7 @@ import scala.util.control.NonFatal
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.hive.ql.metadata.HiveException
+import org.apache.hadoop.hive.ql.metadata.{HiveException}
 import org.apache.thrift.TException
 
 import org.apache.spark.internal.Logging
@@ -342,6 +342,10 @@ private[spark] class HiveExternalCatalog(client: HiveClient, hadoopConf: Configu
       predicates: Seq[Expression] = Nil): Seq[CatalogTablePartition] = withClient {
     client.getPartitionsByFilter(getTable(db, table), predicates)
   }
+
+  // def toHiveTable(table: CatalogTable): HiveTable = withClient {
+  //  client.toHiveTable(table)
+  // }
 
   // --------------------------------------------------------------------------
   // Functions

@@ -170,6 +170,8 @@ case class CatalogTable(
       locationUri, inputFormat, outputFormat, serde, compressed, serdeProperties))
   }
 
+  def isPartitioned: Boolean = partitionColumns.nonEmpty
+
   override def toString: String = {
     val tableProperties = properties.map(p => p._1 + "=" + p._2).mkString("[", ", ", "]")
     val partitionColumns = partitionColumnNames.map("`" + _ + "`").mkString("[", ", ", "]")

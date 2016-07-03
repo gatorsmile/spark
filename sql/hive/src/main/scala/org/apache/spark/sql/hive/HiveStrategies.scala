@@ -177,11 +177,11 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
       // Write path
       case i @ InsertIntoTable(r: MetastoreRelation, _, _, _, _)
           // Inserting into partitioned table is not supported in Parquet/Orc data source (yet).
-          if canConvertToDataSource(r) && !r.hiveQlTable.isPartitioned =>
+          if canConvertToDataSource(r) && !r.catalogTable.isPartitioned =>
         InsertIntoTable(convertToDataSource(r), i.partition, i.child, i.overwrite, i.ifNotExists)
       case i @ hive.InsertIntoHiveTable(r: MetastoreRelation, _, _, _, _)
           // Inserting into partitioned table is not supported in Parquet/Orc data source (yet).
-          if canConvertToDataSource(r) && !r.hiveQlTable.isPartitioned =>
+          if canConvertToDataSource(r) && !r.catalogTable.isPartitioned =>
         InsertIntoTable(convertToDataSource(r), i.partition, i.child, i.overwrite, i.ifNotExists)
 
       // Read path
@@ -236,18 +236,19 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
       TableIdentifier(metastoreRelation.tableName, Some(metastoreRelation.databaseName))
     val bucketSpec = None  // We don't support hive bucketed tables, only ones we write out.
 
-    val result = if (metastoreRelation.hiveQlTable.isPartitioned) {
+    val result = if (metastoreRelation.catalogTable.isPartitioned) {
       val partitionSchema = StructType.fromAttributes(metastoreRelation.partitionKeys)
       val partitionColumnDataTypes = partitionSchema.map(_.dataType)
       // We're converting the entire table into HadoopFsRelation, so predicates to Hive metastore
       // are empty.
-      val partitions = metastoreRelation.getHiveQlPartitions().map { p =>
-        val location = p.getLocation
-        val values = InternalRow.fromSeq(p.getValues.asScala.zip(partitionColumnDataTypes).map {
-          case (rawValue, dataType) => Cast(Literal(rawValue), dataType).eval(null)
-        })
-        PartitionDirectory(values, location)
-      }
+      val partitions =
+        HiveUtils.getHiveQlPartitions(sparkSession, metastoreRelation.catalogTable).map { p =>
+          val location = p.getLocation
+          val values = InternalRow.fromSeq(p.getValues.asScala.zip(partitionColumnDataTypes).map {
+            case (rawValue, dataType) => Cast(Literal(rawValue), dataType).eval(null)
+          })
+          PartitionDirectory(values, location)
+        }
       val partitionSpec = PartitionSpec(partitionSchema, partitions)
 
       val cached = getCached(

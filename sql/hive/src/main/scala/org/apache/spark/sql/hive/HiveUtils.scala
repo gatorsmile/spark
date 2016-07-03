@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hive
 
-import java.io.File
+import java.io.{File, IOException}
 import java.net.{URL, URLClassLoader}
 import java.nio.charset.StandardCharsets
 import java.sql.Timestamp
@@ -28,9 +28,14 @@ import scala.collection.mutable.HashMap
 import scala.language.implicitConversions
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.hive.common.StatsSetupConst
 import org.apache.hadoop.hive.common.`type`.HiveDecimal
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
+import org.apache.hadoop.hive.metastore.{TableType => HiveTableType}
+import org.apache.hadoop.hive.metastore.api.{FieldSchema, SerDeInfo, StorageDescriptor}
+import org.apache.hadoop.hive.ql.metadata.{Partition => HivePartition, Table => HiveTable}
 import org.apache.hadoop.hive.serde2.io.{DateWritable, TimestampWritable}
 import org.apache.hadoop.util.VersionInfo
 
@@ -38,6 +43,8 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.CATALOG_IMPLEMENTATION
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hive.client._
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf._
@@ -440,4 +447,194 @@ private[spark] object HiveUtils extends Logging {
     case (decimal, DecimalType()) => decimal.toString
     case (other, tpe) if primitiveTypes contains tpe => other.toString
   }
+
+  /* -------------------------------------------------------- *
+   |  Helper methods for converting to and from Hive classes  |
+   * -------------------------------------------------------- */
+
+  private def toInputFormat(name: String) =
+    Utils.classForName(name).asInstanceOf[Class[_ <: org.apache.hadoop.mapred.InputFormat[_, _]]]
+
+  private def toOutputFormat(name: String) =
+    Utils.classForName(name)
+      .asInstanceOf[Class[_ <: org.apache.hadoop.hive.ql.io.HiveOutputFormat[_, _]]]
+
+  def toHiveColumn(c: CatalogColumn): FieldSchema = {
+    new FieldSchema(c.name, c.dataType, c.comment.orNull)
+  }
+
+  def fromHiveColumn(hc: FieldSchema): CatalogColumn = {
+    new CatalogColumn(
+      name = hc.getName,
+      dataType = hc.getType,
+      nullable = true,
+      comment = Option(hc.getComment))
+  }
+
+  // TODO: merge this with HiveClientImpl#toHiveTable
+  def toHiveTable(table: CatalogTable, owner: Option[String] = None): HiveTable = {
+    val hiveTable = new HiveTable(table.database, table.identifier.table)
+    // For EXTERNAL_TABLE, we also need to set EXTERNAL field in the table properties.
+    // Otherwise, Hive metastore will change the table to a MANAGED_TABLE.
+    // (metastore/src/java/org/apache/hadoop/hive/metastore/ObjectStore.java#L1095-L1105)
+    hiveTable.setTableType(table.tableType match {
+      case CatalogTableType.EXTERNAL =>
+        hiveTable.setProperty("EXTERNAL", "TRUE")
+        HiveTableType.EXTERNAL_TABLE
+      case CatalogTableType.MANAGED =>
+        HiveTableType.MANAGED_TABLE
+      case CatalogTableType.INDEX => HiveTableType.INDEX_TABLE
+      case CatalogTableType.VIEW => HiveTableType.VIRTUAL_VIEW
+    })
+    // Note: In Hive the schema and partition columns must be disjoint sets
+    val (partCols, schema) = table.schema.map(toHiveColumn).partition { c =>
+      table.partitionColumnNames.contains(c.getName)
+    }
+    if (table.schema.isEmpty) {
+      // This is a hack to preserve existing behavior. Before Spark 2.0, we do not
+      // set a default serde here (this was done in Hive), and so if the user provides
+      // an empty schema Hive would automatically populate the schema with a single
+      // field "col". However, after SPARK-14388, we set the default serde to
+      // LazySimpleSerde so this implicit behavior no longer happens. Therefore,
+      // we need to do it in Spark ourselves.
+      hiveTable.setFields(
+        Seq(new FieldSchema("col", "array<string>", "from deserializer")).asJava)
+    } else {
+      hiveTable.setFields(schema.asJava)
+    }
+    hiveTable.setPartCols(partCols.asJava)
+    // TODO: set sort columns here too
+    hiveTable.setBucketCols(table.bucketColumnNames.asJava)
+    if (owner.isDefined) hiveTable.setOwner(owner.get)
+    hiveTable.setNumBuckets(table.numBuckets)
+    hiveTable.setCreateTime((table.createTime / 1000).toInt)
+    hiveTable.setLastAccessTime((table.lastAccessTime / 1000).toInt)
+    val sd = hiveTable.getSd
+    table.storage.locationUri.foreach(sd.setLocation)
+    table.storage.inputFormat.map(toInputFormat).foreach(hiveTable.setInputFormatClass)
+    table.storage.outputFormat.map(toOutputFormat).foreach(hiveTable.setOutputFormatClass)
+    hiveTable.setSerializationLib(
+      table.storage.serde.getOrElse("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"))
+    table.storage.serdeProperties.foreach { case (k, v) => hiveTable.setSerdeParam(k, v) }
+    table.properties.foreach { case (k, v) => hiveTable.setProperty(k, v) }
+    table.comment.foreach { c => hiveTable.setProperty("comment", c) }
+    table.viewOriginalText.foreach { t => hiveTable.setViewOriginalText(t) }
+    table.viewText.foreach { t => hiveTable.setViewExpandedText(t) }
+    hiveTable
+  }
+
+  def toHivePartition(
+      p: CatalogTablePartition,
+      ht: HiveTable): HivePartition = {
+    val tpart = new org.apache.hadoop.hive.metastore.api.Partition
+    val partValues = ht.getPartCols.asScala.map { hc =>
+      p.spec.get(hc.getName).getOrElse {
+        throw new IllegalArgumentException(
+          s"Partition spec is missing a value for column '${hc.getName}': ${p.spec}")
+      }
+    }
+    val storageDesc = new StorageDescriptor
+    val serdeInfo = new SerDeInfo
+    p.storage.locationUri.foreach(storageDesc.setLocation)
+    p.storage.inputFormat.foreach(storageDesc.setInputFormat)
+    p.storage.outputFormat.foreach(storageDesc.setOutputFormat)
+    p.storage.serde.foreach(serdeInfo.setSerializationLib)
+    serdeInfo.setParameters(p.storage.serdeProperties.asJava)
+    storageDesc.setSerdeInfo(serdeInfo)
+    tpart.setDbName(ht.getDbName)
+    tpart.setTableName(ht.getTableName)
+    tpart.setValues(partValues.asJava)
+    tpart.setSd(storageDesc)
+    new HivePartition(ht, tpart)
+  }
+
+  def fromHivePartition(hp: HivePartition): CatalogTablePartition = {
+    val apiPartition = hp.getTPartition
+    CatalogTablePartition(
+      spec = Option(hp.getSpec).map(_.asScala.toMap).getOrElse(Map.empty),
+      storage = CatalogStorageFormat(
+        locationUri = Option(apiPartition.getSd.getLocation),
+        inputFormat = Option(apiPartition.getSd.getInputFormat),
+        outputFormat = Option(apiPartition.getSd.getOutputFormat),
+        serde = Option(apiPartition.getSd.getSerdeInfo.getSerializationLib),
+        compressed = apiPartition.getSd.isCompressed,
+        serdeProperties = apiPartition.getSd.getSerdeInfo.getParameters.asScala.toMap))
+  }
+
+  def getHiveQlPartitions(
+      sparkSession: SparkSession,
+      table: CatalogTable,
+      predicates: Seq[Expression] = Nil): Seq[HivePartition] = {
+    val dbName = table.identifier.database.getOrElse {
+      throw new IllegalArgumentException(s"table ${table.identifier} did not specify database")
+    }
+    val rawPartitions = if (sparkSession.sessionState.conf.metastorePartitionPruning) {
+      sparkSession.sessionState.catalog.listPartitionsByFilter(table.identifier, predicates)
+    } else {
+      // When metastore partition pruning is turned off, we cache the list of all partitions to
+      // mimic the behavior of Spark < 1.5
+      sparkSession.sessionState.catalog.listPartitions(table.identifier)
+    }
+
+    rawPartitions.map { p =>
+      val tPartition = new org.apache.hadoop.hive.metastore.api.Partition
+      tPartition.setDbName(dbName)
+      tPartition.setTableName(table.identifier.table)
+      tPartition.setValues(table.partitionColumns.map(a => p.spec(a.name)).asJava)
+
+      val sd = new org.apache.hadoop.hive.metastore.api.StorageDescriptor()
+      tPartition.setSd(sd)
+      sd.setCols(table.schema.map(toHiveColumn).asJava)
+      p.storage.locationUri.foreach(sd.setLocation)
+      p.storage.inputFormat.foreach(sd.setInputFormat)
+      p.storage.outputFormat.foreach(sd.setOutputFormat)
+
+      val serdeInfo = new org.apache.hadoop.hive.metastore.api.SerDeInfo
+      sd.setSerdeInfo(serdeInfo)
+      // maps and lists should be set only after all elements are ready (see HIVE-7975)
+      p.storage.serde.foreach(serdeInfo.setSerializationLib)
+
+      val serdeParameters = new java.util.HashMap[String, String]()
+      table.storage.serdeProperties.foreach { case (k, v) => serdeParameters.put(k, v) }
+      p.storage.serdeProperties.foreach { case (k, v) => serdeParameters.put(k, v) }
+      serdeInfo.setParameters(serdeParameters)
+
+      new HivePartition(toHiveTable(table), tPartition)
+    }
+  }
+
+  def getHiveTableSizeInBytes(
+      hiveTable: HiveTable,
+      sparkSession: SparkSession): Long = {
+    val totalSize = hiveTable.getParameters.get(StatsSetupConst.TOTAL_SIZE)
+    val rawDataSize = hiveTable.getParameters.get(StatsSetupConst.RAW_DATA_SIZE)
+    // TODO: check if this estimate is valid for tables after partition pruning.
+    // NOTE: getting `totalSize` directly from params is kind of hacky, but this should be
+    // relatively cheap if parameters for the table are populated into the metastore.
+    // Besides `totalSize`, there are also `numFiles`, `numRows`, `rawDataSize` keys
+    // (see StatsSetupConst in Hive) that we can look at in the future.
+
+    // When table is external,`totalSize` is always zero, which will influence join strategy
+    // so when `totalSize` is zero, use `rawDataSize` instead
+    // if the size is still less than zero, we try to get the file size from HDFS.
+    // given this is only needed for optimization, if the HDFS call fails we return the default.
+    if (totalSize != null && totalSize.toLong > 0L) {
+      totalSize.toLong
+    } else if (rawDataSize != null && rawDataSize.toLong > 0) {
+      rawDataSize.toLong
+    } else if (sparkSession.sessionState.conf.fallBackToHdfsForStatsEnabled) {
+      try {
+        val hadoopConf = sparkSession.sessionState.newHadoopConf()
+        val fs: FileSystem = hiveTable.getPath.getFileSystem(hadoopConf)
+        fs.getContentSummary(hiveTable.getPath).getLength
+      } catch {
+        case e: IOException =>
+          logWarning("Failed to get table size from hdfs.", e)
+          sparkSession.sessionState.conf.defaultSizeInBytes
+      }
+    } else {
+      sparkSession.sessionState.conf.defaultSizeInBytes
+    }
+  }
+
 }

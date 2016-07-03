@@ -17,21 +17,12 @@
 
 package org.apache.spark.sql.hive
 
-import java.io.IOException
 import java.util.Properties
-
-import scala.collection.JavaConverters._
-
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.hive.common.StatsSetupConst
-import org.apache.hadoop.hive.metastore.{TableType => HiveTableType}
-import org.apache.hadoop.hive.metastore.api.FieldSchema
-import org.apache.hadoop.hive.ql.metadata.{Table => HiveTable}
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.catalog.{CatalogColumn, CatalogRelation, CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.catalog.{CatalogColumn, CatalogRelation, CatalogTable}
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
 import org.apache.spark.sql.execution.FileRelation
@@ -118,84 +109,6 @@ case class HiveRelation(
     }
   }
 
-  private def toHiveColumn(c: CatalogColumn): FieldSchema = {
-    new FieldSchema(c.name, c.dataType, c.comment.orNull)
-  }
-
-  // TODO: merge this with HiveClientImpl#toHiveTable
-  @transient val hiveQlTable: HiveTable = {
-    // We start by constructing an API table as Hive performs several important transformations
-    // internally when converting an API table to a QL table.
-    val tTable = new org.apache.hadoop.hive.metastore.api.Table()
-    tTable.setTableName(catalogTable.identifier.table)
-    tTable.setDbName(catalogTable.database)
-
-    val tableParameters = new java.util.HashMap[String, String]()
-    tTable.setParameters(tableParameters)
-    catalogTable.properties.foreach { case (k, v) => tableParameters.put(k, v) }
-
-    tTable.setTableType(catalogTable.tableType match {
-      case CatalogTableType.EXTERNAL => HiveTableType.EXTERNAL_TABLE.toString
-      case CatalogTableType.MANAGED => HiveTableType.MANAGED_TABLE.toString
-      case CatalogTableType.INDEX => HiveTableType.INDEX_TABLE.toString
-      case CatalogTableType.VIEW => HiveTableType.VIRTUAL_VIEW.toString
-    })
-
-    val sd = new org.apache.hadoop.hive.metastore.api.StorageDescriptor()
-    tTable.setSd(sd)
-
-    // Note: In Hive the schema and partition columns must be disjoint sets
-    val (partCols, schema) = catalogTable.schema.map(toHiveColumn).partition { c =>
-      catalogTable.partitionColumnNames.contains(c.getName)
-    }
-    sd.setCols(schema.asJava)
-    tTable.setPartitionKeys(partCols.asJava)
-
-    catalogTable.storage.locationUri.foreach(sd.setLocation)
-    catalogTable.storage.inputFormat.foreach(sd.setInputFormat)
-    catalogTable.storage.outputFormat.foreach(sd.setOutputFormat)
-
-    val serdeInfo = new org.apache.hadoop.hive.metastore.api.SerDeInfo
-    catalogTable.storage.serde.foreach(serdeInfo.setSerializationLib)
-    sd.setSerdeInfo(serdeInfo)
-
-    val serdeParameters = new java.util.HashMap[String, String]()
-    catalogTable.storage.serdeProperties.foreach { case (k, v) => serdeParameters.put(k, v) }
-    serdeInfo.setParameters(serdeParameters)
-
-    new HiveTable(tTable)
-  }
-
-  override def sizeInBytes: Long = {
-    val totalSize = hiveQlTable.getParameters.get(StatsSetupConst.TOTAL_SIZE)
-    val rawDataSize = hiveQlTable.getParameters.get(StatsSetupConst.RAW_DATA_SIZE)
-    // TODO: check if this estimate is valid for tables after partition pruning.
-    // NOTE: getting `totalSize` directly from params is kind of hacky, but this should be
-    // relatively cheap if parameters for the table are populated into the metastore.
-    // Besides `totalSize`, there are also `numFiles`, `numRows`, `rawDataSize` keys
-    // (see StatsSetupConst in Hive) that we can look at in the future.
-
-    // When table is external,`totalSize` is always zero, which will influence join strategy
-    // so when `totalSize` is zero, use `rawDataSize` instead
-    // if the size is still less than zero, we try to get the file size from HDFS.
-    // given this is only needed for optimization, if the HDFS call fails we return the default.
-    if (totalSize != null && totalSize.toLong > 0L) {
-      totalSize.toLong
-    } else if (rawDataSize != null && rawDataSize.toLong > 0) {
-      rawDataSize.toLong
-    } else if (sparkSession.sessionState.conf.fallBackToHdfsForStatsEnabled) {
-      try {
-        val hadoopConf = sparkSession.sessionState.newHadoopConf()
-        val fs: FileSystem = hiveQlTable.getPath.getFileSystem(hadoopConf)
-        fs.getContentSummary(hiveQlTable.getPath).getLength
-      } catch {
-        case e: IOException =>
-          logWarning("Failed to get table size from hdfs.", e)
-          sparkSession.sessionState.conf.defaultSizeInBytes
-      }
-    } else {
-      sparkSession.sessionState.conf.defaultSizeInBytes
-    }
-  }
-
+  override def sizeInBytes: Long =
+    HiveUtils.getHiveTableSizeInBytes(HiveUtils.toHiveTable(catalogTable), sparkSession)
 }
