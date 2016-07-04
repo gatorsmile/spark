@@ -123,30 +123,3 @@ private[hive] case class MetastoreRelation(
     MetastoreRelation(databaseName, tableName, alias)(catalogTable, sparkSession)
   }
 }
-
-/**
- * Logical plan node for representing insertion into Hive table.
- * This plan ignores nullability of ArrayType, MapType, StructType unlike InsertIntoTable
- * because Hive table doesn't have nullability for ARRAY, MAP, STRUCT types.
- */
-private[hive] case class InsertIntoHiveTable(
-    table: MetastoreRelation,
-    partition: Map[String, Option[String]],
-    child: LogicalPlan,
-    overwrite: Boolean,
-    ifNotExists: Boolean)
-  extends LogicalPlan {
-
-  override def children: Seq[LogicalPlan] = child :: Nil
-  override def output: Seq[Attribute] = Seq.empty
-
-  val numDynamicPartitions = partition.values.count(_.isEmpty)
-
-  // This is the expected schema of the table prepared to be inserted into,
-  // including dynamic partition columns.
-  val tableOutput = table.attributes ++ table.partitionKeys.takeRight(numDynamicPartitions)
-
-  override lazy val resolved: Boolean = childrenResolved && child.output.zip(tableOutput).forall {
-    case (childAttr, tableAttr) => childAttr.dataType.sameType(tableAttr.dataType)
-  }
-}

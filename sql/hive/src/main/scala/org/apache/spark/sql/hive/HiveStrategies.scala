@@ -55,12 +55,7 @@ private[hive] trait HiveStrategies {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case logical.InsertIntoTable(
           table: MetastoreRelation, partition, child, overwrite, ifNotExists) =>
-        execution.InsertIntoHiveTable(
-          table, partition, planLater(child), overwrite, ifNotExists) :: Nil
-      case hive.InsertIntoHiveTable(
-          table: MetastoreRelation, partition, child, overwrite, ifNotExists) =>
-        execution.InsertIntoHiveTable(
-          table, partition, planLater(child), overwrite, ifNotExists) :: Nil
+        InsertIntoHiveTable(table, partition, planLater(child), overwrite, ifNotExists) :: Nil
       case _ => Nil
     }
   }
@@ -139,11 +134,6 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
           // Inserting into partitioned table is not supported in Parquet/Orc data source (yet).
           if canConvertToDataSource(r) && !r.catalogTable.isPartitioned =>
         InsertIntoTable(convertToDataSource(r), i.partition, i.child, i.overwrite, i.ifNotExists)
-      case i @ hive.InsertIntoHiveTable(r: MetastoreRelation, _, _, _, _)
-          // Inserting into partitioned table is not supported in Parquet/Orc data source (yet).
-          if canConvertToDataSource(r) && !r.catalogTable.isPartitioned =>
-        InsertIntoTable(convertToDataSource(r), i.partition, i.child, i.overwrite, i.ifNotExists)
-
       // Read path
       case r: MetastoreRelation if canConvertToDataSource(r) =>
         SubqueryAlias(r.alias.getOrElse(r.tableName), convertToDataSource(r))
