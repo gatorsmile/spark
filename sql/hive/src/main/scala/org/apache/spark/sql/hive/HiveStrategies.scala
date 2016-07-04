@@ -122,46 +122,6 @@ private[hive] class CreateTables(sparkSession: SparkSession) extends Rule[Logica
 }
 
 /**
- * Casts input data to correct data types according to table definition before inserting into
- * that table.
- */
-private[hive] object PreInsertionCasts extends Rule[LogicalPlan] {
-  def apply(plan: LogicalPlan): LogicalPlan = plan.transform {
-    // Wait until children are resolved.
-    case p: LogicalPlan if !p.childrenResolved => p
-
-    case p @ InsertIntoTable(table: MetastoreRelation, _, _, _, _) => castChildOutput(p, table)
-  }
-
-  def castChildOutput(p: InsertIntoTable, table: MetastoreRelation): LogicalPlan = {
-    val childOutputDataTypes = p.child.output.map(_.dataType)
-    val numDynamicPartitions = p.partition.values.count(_.isEmpty)
-    val tableOutputDataTypes =
-      (table.attributes ++ table.partitionKeys.takeRight(numDynamicPartitions))
-        .take(p.child.output.length).map(_.dataType)
-
-    if (childOutputDataTypes == tableOutputDataTypes) {
-      hive.InsertIntoHiveTable(table, p.partition, p.child, p.overwrite, p.ifNotExists)
-    } else if (childOutputDataTypes.size == tableOutputDataTypes.size &&
-      childOutputDataTypes.zip(tableOutputDataTypes)
-        .forall { case (left, right) => left.sameType(right) }) {
-      // If both types ignoring nullability of ArrayType, MapType, StructType are the same,
-      // use InsertIntoHiveTable instead of InsertIntoTable.
-      hive.InsertIntoHiveTable(table, p.partition, p.child, p.overwrite, p.ifNotExists)
-    } else {
-      // Only do the casting when child output data types differ from table output data types.
-      val castedChildOutput = p.child.output.zip(table.output).map {
-        case (input, output) if input.dataType != output.dataType =>
-          Alias(Cast(input, output.dataType), input.name)()
-        case (input, _) => input
-      }
-
-      p.copy(child = logical.Project(castedChildOutput, p.child))
-    }
-  }
-}
-
-/**
  * When scanning or writing to non-partitioned Metastore Parquet tables, convert them to Parquet
  * data source relations for better performance.
  *
