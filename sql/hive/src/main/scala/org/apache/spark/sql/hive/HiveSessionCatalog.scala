@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTableType, FunctionResource
 import org.apache.spark.sql.catalyst.expressions.{Cast, Expression, ExpressionInfo}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.execution.command.DDLUtils
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.hive.HiveShim.HiveFunctionWrapper
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{DecimalType, DoubleType}
@@ -83,8 +84,11 @@ private[sql] class HiveSessionCatalog(
             SubqueryAlias(aliasText, sparkSession.sessionState.sqlParser.parsePlan(viewText))
         }
       } else {
-        val qualifiedTable = MetastoreRelation(
-          database, table)(catalogTable = metadata, sparkSession)
+        // val qualifiedTable = MetastoreRelation(
+        //   database, table)(catalogTable = metadata, sparkSession)
+        val qualifiedTable =
+          LogicalRelation(HiveRelation(sparkSession, catalogTable = metadata),
+            metastoreTableIdentifier = Option(metadata.identifier))
         alias.map(a => SubqueryAlias(a, qualifiedTable)).getOrElse(qualifiedTable)
       }
     } else {

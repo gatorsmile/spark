@@ -223,14 +223,12 @@ case class InsertIntoHiveTable(
         jobConf,
         fileSinkConf,
         dynamicPartColNames,
-        child.output,
-        table)
+        child.output)
     } else {
       new SparkHiveWriterContainer(
         jobConf,
         fileSinkConf,
-        child.output,
-        table)
+        child.output)
     }
 
     @transient val outputClass = writerContainer.newSerializer(table.tableDesc).getSerializedClass

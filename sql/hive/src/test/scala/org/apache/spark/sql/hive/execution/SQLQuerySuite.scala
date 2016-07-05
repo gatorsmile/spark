@@ -1019,6 +1019,13 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
         java.lang.Math.floor(1.9).toString))
   }
 
+  test("insert") {
+    withTable("test") {
+      sql("create table test (value int)")
+      sql("insert into table test values (3)")
+    }
+  }
+
   test("dynamic partition value test") {
     try {
       sql("set hive.exec.dynamic.partition.mode=nonstrict")

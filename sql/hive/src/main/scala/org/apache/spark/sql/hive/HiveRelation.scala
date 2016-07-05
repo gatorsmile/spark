@@ -19,6 +19,9 @@ package org.apache.spark.sql.hive
 
 import java.util.Properties
 
+import org.apache.hadoop.hive.ql.metadata.{Table => HiveTable}
+import org.apache.hadoop.hive.ql.plan.TableDesc
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
@@ -57,6 +60,18 @@ case class HiveRelation(
     }
   }
 
+  @transient val hiveQlTable: HiveTable = HiveUtils.toHiveTable(catalogTable)
+
+  val tableDesc = new TableDesc(
+    hiveQlTable.getInputFormatClass,
+    // The class of table should be org.apache.hadoop.hive.ql.metadata.Table because
+    // getOutputFormatClass will use HiveFileFormatUtils.getOutputFormatSubstitute to
+    // substitute some output formats, e.g. substituting SequenceFileOutputFormat to
+    // HiveSequenceFileOutputFormat.
+    hiveQlTable.getOutputFormatClass,
+    hiveQlTable.getMetadata
+  )
+
   /** PartitionKey attributes */
   val partitionKeys = catalogTable.partitionColumns.map(_.toAttribute)
 
@@ -76,11 +91,19 @@ case class HiveRelation(
   }
 
   override def insert(data: DataFrame, overwrite: Boolean): Unit = {
+    // scalastyle:off println
+    println("insert is started")
+    // scalastyle:on println
+
     // HiveInsertUtils.insert(data, overwrite)
     // data.queryExecution.toRdd
     // data.write
     //   .mode(if (overwrite) SaveMode.Overwrite else SaveMode.Append)
     //   .hive(catalogTable.identifier.unquotedString, properties)
+
+    // scalastyle:off println
+    println("insert is done")
+    // scalastyle:on println
   }
 
   // override def createRelation(
@@ -104,5 +127,5 @@ case class HiveRelation(
   }
 
   override def sizeInBytes: Long =
-    HiveUtils.getHiveTableSizeInBytes(HiveUtils.toHiveTable(catalogTable), sparkSession)
+    HiveUtils.getHiveTableSizeInBytes(hiveQlTable, sparkSession)
 }
