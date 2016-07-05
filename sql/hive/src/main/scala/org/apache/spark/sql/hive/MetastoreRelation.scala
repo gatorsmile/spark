@@ -17,26 +17,21 @@
 
 package org.apache.spark.sql.hive
 
-import java.io.IOException
-
 import com.google.common.base.Objects
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.hive.common.StatsSetupConst
 import org.apache.hadoop.hive.ql.metadata.{Table => HiveTable}
 import org.apache.hadoop.hive.ql.plan.TableDesc
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.catalog._
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}
+import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference}
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Statistics}
 import org.apache.spark.sql.execution.FileRelation
 
 private[hive] case class MetastoreRelation(
     databaseName: String,
-    tableName: String,
-    alias: Option[String])
+    tableName: String)
     (val catalogTable: CatalogTable,
      @transient private val sparkSession: SparkSession)
   extends LeafNode with MultiInstanceRelation with FileRelation with CatalogRelation {
@@ -45,13 +40,12 @@ private[hive] case class MetastoreRelation(
     case relation: MetastoreRelation =>
       databaseName == relation.databaseName &&
         tableName == relation.tableName &&
-        alias == relation.alias &&
         output == relation.output
     case _ => false
   }
 
   override def hashCode(): Int = {
-    Objects.hashCode(databaseName, tableName, alias, output)
+    Objects.hashCode(databaseName, tableName, output)
   }
 
   override protected def otherCopyArgs: Seq[AnyRef] = catalogTable :: sparkSession :: Nil
@@ -87,7 +81,7 @@ private[hive] case class MetastoreRelation(
       CatalystSqlParser.parseDataType(f.dataType),
       // Since data can be dumped in randomly with no validation, everything is nullable.
       nullable = true
-    )(qualifier = Some(alias.getOrElse(tableName)))
+    )(qualifier = Some(tableName))
   }
 
   /** PartitionKey attributes */
@@ -120,6 +114,6 @@ private[hive] case class MetastoreRelation(
   }
 
   override def newInstance(): MetastoreRelation = {
-    MetastoreRelation(databaseName, tableName, alias)(catalogTable, sparkSession)
+    MetastoreRelation(databaseName, tableName)(catalogTable, sparkSession)
   }
 }

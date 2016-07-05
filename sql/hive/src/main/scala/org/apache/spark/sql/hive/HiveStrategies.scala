@@ -136,7 +136,7 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
         InsertIntoTable(convertToDataSource(r), i.partition, i.child, i.overwrite, i.ifNotExists)
       // Read path
       case r: MetastoreRelation if canConvertToDataSource(r) =>
-        SubqueryAlias(r.alias.getOrElse(r.tableName), convertToDataSource(r))
+        SubqueryAlias(r.tableName, convertToDataSource(r))
     }
   }
 

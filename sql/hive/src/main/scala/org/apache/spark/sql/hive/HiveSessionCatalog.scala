@@ -83,8 +83,9 @@ private[sql] class HiveSessionCatalog(
             SubqueryAlias(aliasText, sparkSession.sessionState.sqlParser.parsePlan(viewText))
         }
       } else {
-        MetastoreRelation(
-          database, table, alias)(catalogTable = metadata, sparkSession)
+        val qualifiedTable = MetastoreRelation(
+          database, table)(catalogTable = metadata, sparkSession)
+        alias.map(a => SubqueryAlias(a, qualifiedTable)).getOrElse(qualifiedTable)
       }
     } else {
       val relation = tempTables(table)

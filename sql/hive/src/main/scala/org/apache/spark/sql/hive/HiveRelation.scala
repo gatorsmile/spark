@@ -48,18 +48,12 @@ case class HiveRelation(
 
   implicit class SchemaAttribute(f: CatalogColumn) {
     def toAttribute: AttributeReference = {
-      val alias: Option[String] =
-        if (!properties.contains("alias")) {
-          None
-        } else {
-          Some(properties.get("alias").toString)
-        }
       AttributeReference(
         f.name,
         CatalystSqlParser.parseDataType(f.dataType),
         // Since data can be dumped in randomly with no validation, everything is nullable.
         nullable = true
-      )(qualifier = Some(alias.getOrElse(catalogTable.identifier.table)))
+      )(qualifier = Some(catalogTable.identifier.table))
     }
   }
 
