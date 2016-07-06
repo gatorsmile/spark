@@ -27,7 +27,7 @@ import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.sources.{BaseRelation, InsertableRelation}
+import org.apache.spark.sql.sources.{BaseRelation, InsertableRelation, InsertHiveRelation}
 
 /**
  * Try to replaces [[UnresolvedRelation]]s with [[ResolveDataSource]].
@@ -145,6 +145,9 @@ private[sql] case class PreprocessTableInsertion(conf: SQLConf) extends Rule[Log
         case LogicalRelation(_: InsertableRelation, _, identifier) =>
           val tblName = identifier.map(_.quotedString).getOrElse("unknown")
           preprocess(i, tblName, Nil)
+        case LogicalRelation(_: InsertHiveRelation, _, identifier) =>
+          val tblName = identifier.map(_.quotedString).getOrElse("unknown")
+          preprocess(i, tblName, Nil)
         case other => i
       }
   }
@@ -178,6 +181,10 @@ private[sql] case class PreWriteCheck(conf: SQLConf, catalog: SessionCatalog)
             // OK
           }
         }
+
+      case i @ logical.InsertIntoTable(
+        l @ LogicalRelation(t: InsertHiveRelation, _, _),
+        partition, query, overwrite, ifNotExists) => // TODO: anything we need to check here?
 
       case logical.InsertIntoTable(
         LogicalRelation(r: HadoopFsRelation, _, _), part, query, overwrite, _) =>

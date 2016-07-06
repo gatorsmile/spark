@@ -252,6 +252,11 @@ private[sql] object DataSourceStrategy extends Strategy with Logging {
         if part.isEmpty =>
       ExecutedCommandExec(InsertIntoDataSourceCommand(l, query, overwrite)) :: Nil
 
+    case i @ logical.InsertIntoTable(
+        l @ LogicalRelation(t: InsertHiveRelation, _, _), part, query, overwrite, ifNotExists) =>
+      ExecutedCommandExec(
+        InsertIntoHiveDataSourceCommand(l, part, query, overwrite, ifNotExists)) :: Nil
+
     case _ => Nil
   }
 

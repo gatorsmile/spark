@@ -292,6 +292,14 @@ trait InsertableRelation {
   def insert(data: DataFrame, overwrite: Boolean): Unit
 }
 
+trait InsertHiveRelation {
+  def insert(
+    partition: Map[String, Option[String]],
+    data: DataFrame,
+    overwrite: Boolean,
+    ifNotExists: Boolean): Unit
+}
+
 /**
  * ::Experimental::
  * An interface for experimenting with a more direct connection to the query planner.  Compared to

@@ -53,8 +53,6 @@ case class HiveInsertUtils(
   @transient private val sessionState = sparkSession.sessionState.asInstanceOf[HiveSessionState]
   @transient private val client = sessionState.metadataHive
 
-  def output: Seq[Attribute] = Seq.empty
-
   val stagingDir = sessionState.conf.getConfString("hive.exec.stagingdir", ".hive-staging")
 
   private def executionId: String = {

@@ -29,6 +29,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogColumn, CatalogRelation, Ca
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
 import org.apache.spark.sql.execution.FileRelation
+import org.apache.spark.sql.hive.execution.HiveInsertUtils
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
@@ -40,7 +41,7 @@ case class HiveRelation(
   extends BaseRelation
     with PrunedFilteredScan
     // with CreatableRelationProvider
-    with InsertableRelation
+    with InsertHiveRelation
     with FileRelation
     with CatalogRelation
     with Logging {
@@ -90,28 +91,21 @@ case class HiveRelation(
     sparkSession.sparkContext.parallelize(0 to 10).map(Row(_))
   }
 
-  override def insert(data: DataFrame, overwrite: Boolean): Unit = {
+  override def insert(
+      partition: Map[String, Option[String]],
+      data: DataFrame,
+      overwrite: Boolean,
+      ifNotExists: Boolean): Unit = {
     // scalastyle:off println
     println("insert is started")
-    // scalastyle:on println
 
-    // HiveInsertUtils.insert(data, overwrite)
-    // data.queryExecution.toRdd
-    // data.write
-    //   .mode(if (overwrite) SaveMode.Overwrite else SaveMode.Append)
-    //   .hive(catalogTable.identifier.unquotedString, properties)
+    HiveInsertUtils(sparkSession, this, partition, data, overwrite, ifNotExists).doExecute()
+    // scalastyle:on println
 
     // scalastyle:off println
     println("insert is done")
     // scalastyle:on println
   }
-
-  // override def createRelation(
-  //     sqlContext: SQLContext,
-  //     mode: SaveMode,
-  //     parameters: Map[String, String],
-  //     data: DataFrame): BaseRelation = {
-  // }
 
   override def inputFiles: Array[String] = {
     val partLocations = sparkSession.sessionState.catalog.listPartitions(catalogTable.identifier)

@@ -21,7 +21,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.sources.InsertableRelation
+import org.apache.spark.sql.sources.{InsertableRelation, InsertHiveRelation}
 
 
 /**
@@ -41,6 +41,30 @@ private[sql] case class InsertIntoDataSourceCommand(
     // Apply the schema of the existing table to the new data.
     val df = sparkSession.internalCreateDataFrame(data.queryExecution.toRdd, logicalRelation.schema)
     relation.insert(df, overwrite)
+
+    // Invalidate the cache.
+    sparkSession.sharedState.cacheManager.invalidateCache(logicalRelation)
+
+    Seq.empty[Row]
+  }
+}
+
+private[sql] case class InsertIntoHiveDataSourceCommand(
+    logicalRelation: LogicalRelation,
+    partition: Map[String, Option[String]],
+    query: LogicalPlan,
+    overwrite: Boolean,
+    ifNotExists: Boolean)
+  extends RunnableCommand {
+
+  override protected def innerChildren: Seq[QueryPlan[_]] = Seq(query)
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val relation = logicalRelation.relation.asInstanceOf[InsertHiveRelation]
+    val data = Dataset.ofRows(sparkSession, query)
+    // Apply the schema of the existing table to the new data.
+    val df = sparkSession.internalCreateDataFrame(data.queryExecution.toRdd, logicalRelation.schema)
+    relation.insert(partition, df, overwrite, ifNotExists)
 
     // Invalidate the cache.
     sparkSession.sharedState.cacheManager.invalidateCache(logicalRelation)
