@@ -131,12 +131,12 @@ case class HiveInsertUtils(
   }
 
   /**
-    * Inserts all the rows in the table into Hive.  Row objects are properly serialized with the
-    * `org.apache.hadoop.hive.serde2.SerDe` and the
-    * `org.apache.hadoop.mapred.OutputFormat` provided by the table definition.
-    *
-    * Note: this is run once and then kept to avoid double insertions.
-    */
+   * Inserts all the rows in the table into Hive.  Row objects are properly serialized with the
+   * `org.apache.hadoop.hive.serde2.SerDe` and the
+   * `org.apache.hadoop.mapred.OutputFormat` provided by the table definition.
+   *
+   * Note: this is run once and then kept to avoid double insertions.
+   */
   protected[sql] lazy val sideEffectResult: Seq[InternalRow] = {
     // Have to pass the TableDesc object to RDD.mapPartitions and then instantiate new serializer
     // instances within the closure, since Serializer is not serializable while TableDesc is.

@@ -84,11 +84,11 @@ private[sql] class HiveSessionCatalog(
             SubqueryAlias(aliasText, sparkSession.sessionState.sqlParser.parsePlan(viewText))
         }
       } else {
-        // val qualifiedTable = MetastoreRelation(
-        //   database, table)(catalogTable = metadata, sparkSession)
-        val qualifiedTable =
-          LogicalRelation(HiveRelation(sparkSession, catalogTable = metadata),
-            metastoreTableIdentifier = Option(metadata.identifier))
+        val qualifiedTable = MetastoreRelation(
+          database, table)(catalogTable = metadata, sparkSession)
+        // val qualifiedTable =
+        //   LogicalRelation(HiveRelation(sparkSession, catalogTable = metadata),
+        //    metastoreTableIdentifier = Option(metadata.identifier))
         alias.map(a => SubqueryAlias(a, qualifiedTable)).getOrElse(qualifiedTable)
       }
     } else {

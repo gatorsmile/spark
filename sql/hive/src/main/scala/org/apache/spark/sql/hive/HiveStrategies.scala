@@ -51,6 +51,7 @@ private[hive] trait HiveStrategies {
     }
   }
 
+  // TODO: This can be removed now, since the plan does not have MetastoreRelation
   object DataSinks extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case logical.InsertIntoTable(
@@ -98,19 +99,11 @@ private[hive] class CreateTables(sparkSession: SparkSession) extends Rule[Logica
     case p: LogicalPlan if p.resolved => p
 
     case p @ CreateHiveTableAsSelectLogicalPlan(table, child, allowExisting) =>
-      val desc = if (table.storage.serde.isEmpty) {
-        // add default serde
-        table.withNewStorage(
-          serde = Some("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"))
-      } else {
-        table
-      }
-
       val catalog = sparkSession.sessionState.catalog
       val db = table.identifier.database.getOrElse(catalog.getCurrentDatabase).toLowerCase
 
       execution.CreateHiveTableAsSelectCommand(
-        desc.copy(identifier = TableIdentifier(table.identifier.table, Some(db))),
+        table.copy(identifier = TableIdentifier(table.identifier.table, Some(db))),
         child,
         allowExisting)
   }

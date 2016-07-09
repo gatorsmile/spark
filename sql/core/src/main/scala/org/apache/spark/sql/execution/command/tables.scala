@@ -49,7 +49,7 @@ case class CreateHiveTableAsSelectLogicalPlan(
   override lazy val resolved: Boolean =
     tableDesc.identifier.database.isDefined &&
       tableDesc.schema.nonEmpty &&
-      tableDesc.storage.serde.isDefined &&
+      // tableDesc.storage.serde.isDefined &&
       tableDesc.storage.inputFormat.isDefined &&
       tableDesc.storage.outputFormat.isDefined &&
       childrenResolved
