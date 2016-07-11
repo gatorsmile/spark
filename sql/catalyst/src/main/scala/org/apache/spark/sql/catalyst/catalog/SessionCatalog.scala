@@ -475,6 +475,22 @@ class SessionCatalog(
   }
 
   /**
+   * Invalidate all the cache entries.
+   */
+  def invalidateAll(): Unit = { /* no-op */ }
+
+  /**
+   * Directly put the cache entry for a metastore table, if any.
+   */
+  def cacheDataSourceTable(name: TableIdentifier, plan: LogicalPlan): Unit = { /* no-op */ }
+
+  /**
+   * Get the cache entry for a metastore table, if given.
+   * If cache missed, returns None. It will not invoke automatic loading.
+   */
+  def getCachedDataSourceTableIfPresent(name: TableIdentifier): Option[LogicalPlan] = { None }
+
+  /**
    * Drop all existing temporary tables.
    * For testing only.
    */
@@ -600,6 +616,16 @@ class SessionCatalog(
     requireDbExists(db)
     requireTableExists(TableIdentifier(table, Option(db)))
     externalCatalog.listPartitions(db, table, partialSpec)
+  }
+
+  def listPartitionsByFilter(
+      tableName: TableIdentifier,
+      predicates: Seq[Expression] = Nil): Seq[CatalogTablePartition] = {
+    val db = formatDatabaseName(tableName.database.getOrElse(getCurrentDatabase))
+    val table = formatTableName(tableName.table)
+    requireDbExists(db)
+    requireTableExists(TableIdentifier(table, Option(db)))
+    externalCatalog.listPartitionsByFilter(db, table, predicates)
   }
 
   /**
@@ -870,6 +896,10 @@ class SessionCatalog(
   // -----------------
   // | Other methods |
   // -----------------
+
+  def addJar(path: String): Unit = synchronized {
+    externalCatalog.addJar(path)
+  }
 
   /**
    * Drop all existing databases (except "default"), tables, partitions and functions,

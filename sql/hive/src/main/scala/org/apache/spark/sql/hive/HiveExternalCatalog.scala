@@ -23,13 +23,14 @@ import scala.util.control.NonFatal
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.hive.ql.metadata.HiveException
+import org.apache.hadoop.hive.ql.metadata.{HiveException}
 import org.apache.thrift.TException
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.hive.client.HiveClient
 
 
@@ -332,6 +333,20 @@ private[spark] class HiveExternalCatalog(client: HiveClient, hadoopConf: Configu
     client.getPartitions(db, table, partialSpec)
   }
 
+  /**
+   * Returns the partition names from hive metastore for a given table in a database.
+   */
+  override def listPartitionsByFilter(
+      db: String,
+      table: String,
+      predicates: Seq[Expression] = Nil): Seq[CatalogTablePartition] = withClient {
+    client.getPartitionsByFilter(getTable(db, table), predicates)
+  }
+
+  // def toHiveTable(table: CatalogTable): HiveTable = withClient {
+  //  client.toHiveTable(table)
+  // }
+
   // --------------------------------------------------------------------------
   // Functions
   // --------------------------------------------------------------------------
@@ -367,4 +382,7 @@ private[spark] class HiveExternalCatalog(client: HiveClient, hadoopConf: Configu
     client.listFunctions(db, pattern)
   }
 
+  override def addJar(path: String): Unit = synchronized {
+    client.addJar(path)
+  }
 }

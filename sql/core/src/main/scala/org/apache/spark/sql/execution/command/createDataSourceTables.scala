@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.HiveSerDe
-import org.apache.spark.sql.sources.InsertableRelation
+import org.apache.spark.sql.sources.{InsertableRelation, InsertHiveRelation}
 import org.apache.spark.sql.types._
 
 /**
@@ -196,7 +196,8 @@ case class CreateDataSourceTableAsSelectCommand(
 
           EliminateSubqueryAliases(
             sessionState.catalog.lookupRelation(tableIdent)) match {
-            case l @ LogicalRelation(_: InsertableRelation | _: HadoopFsRelation, _, _) =>
+            case l @ LogicalRelation(
+                _: InsertableRelation | _: InsertHiveRelation | _: HadoopFsRelation, _, _) =>
               // check if the file formats match
               l.relation match {
                 case r: HadoopFsRelation if r.fileFormat.getClass != dataSource.providingClass =>
@@ -500,5 +501,32 @@ object CreateDataSourceTableUtils extends Logging {
         val table = newSparkSQLSpecificMetastoreTable()
         sparkSession.sessionState.catalog.createTable(table, ignoreIfExists = false)
     }
+  }
+
+  def buildDataSourceTable(
+      sparkSession: SparkSession,
+      table: CatalogTable): LogicalRelation = {
+    val userSpecifiedSchema = DDLUtils.getSchemaFromTableProperties(table)
+
+    // We only need names at here since userSpecifiedSchema we loaded from the metastore
+    // contains partition columns. We can always get datatypes of partitioning columns
+    // from userSpecifiedSchema.
+    val partitionColumns = DDLUtils.getPartitionColumnsFromTableProperties(table)
+
+    val bucketSpec = DDLUtils.getBucketSpecFromTableProperties(table)
+
+    val options = table.storage.serdeProperties
+
+    val dataSource = DataSource(
+      sparkSession,
+      userSpecifiedSchema = userSpecifiedSchema,
+      partitionColumns = partitionColumns,
+      bucketSpec = bucketSpec,
+      className = table.properties(CreateDataSourceTableUtils.DATASOURCE_PROVIDER),
+      options = options)
+
+    LogicalRelation(
+      dataSource.resolveRelation(checkPathExist = true),
+      metastoreTableIdentifier = Some(table.identifier))
   }
 }

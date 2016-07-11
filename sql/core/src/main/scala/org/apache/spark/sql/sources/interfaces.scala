@@ -21,6 +21,7 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.streaming.OutputMode
@@ -289,6 +290,14 @@ trait PrunedFilteredScan {
 @DeveloperApi
 trait InsertableRelation {
   def insert(data: DataFrame, overwrite: Boolean): Unit
+}
+
+trait InsertHiveRelation {
+  def insert(
+    partition: Map[String, Option[String]],
+    data: DataFrame,
+    overwrite: Boolean,
+    ifNotExists: Boolean): Unit
 }
 
 /**

@@ -51,7 +51,7 @@ case class HiveTableScanExec(
     @transient private val sparkSession: SparkSession)
   extends LeafExecNode {
 
-  require(partitionPruningPred.isEmpty || relation.hiveQlTable.isPartitioned,
+  require(partitionPruningPred.isEmpty || relation.catalogTable.isPartitioned,
     "Partition pruning predicates only supported for partitioned tables.")
 
   private[sql] override lazy val metrics = Map(
@@ -141,14 +141,16 @@ case class HiveTableScanExec(
   protected override def doExecute(): RDD[InternalRow] = {
     // Using dummyCallSite, as getCallSite can turn out to be expensive with
     // with multiple partitions.
-    val rdd = if (!relation.hiveQlTable.isPartitioned) {
+    val rdd = if (!relation.catalogTable.isPartitioned) {
       Utils.withDummyCallSite(sqlContext.sparkContext) {
         hadoopReader.makeRDDForTable(relation.hiveQlTable)
       }
     } else {
+      val partitions =
+        HiveUtils.getHiveQlPartitions(sparkSession, relation.catalogTable, partitionPruningPred)
       Utils.withDummyCallSite(sqlContext.sparkContext) {
         hadoopReader.makeRDDForPartitionedTable(
-          prunePartitions(relation.getHiveQlPartitions(partitionPruningPred)))
+          prunePartitions(partitions))
       }
     }
     val numOutputRows = longMetric("numOutputRows")
