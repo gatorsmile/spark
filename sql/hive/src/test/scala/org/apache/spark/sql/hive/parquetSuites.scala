@@ -382,7 +382,7 @@ class ParquetMetastoreSuite extends ParquetPartitioningTest {
     plan.collectFirst {
       case LogicalRelation(r: HadoopFsRelation, _, _) => r
     }.getOrElse {
-      fail(s"Expecting a HadoopFsRelation 2, but got:\n$plan")
+      fail(s"Expecting a HadoopFsRelation, but got:\n$plan")
     }
   }
 
