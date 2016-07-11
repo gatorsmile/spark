@@ -297,7 +297,7 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
               Some(logical)
             } else {
               // If the cached relation is not updated, we invalidate it right away.
-              sparkSession.sessionState.catalog.invalidateTable(tableIdentifier)
+              sparkSession.sessionState.catalog.refreshTable(tableIdentifier)
               None
             }
           case _ =>
@@ -306,7 +306,7 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
                 s"should be stored as $expectedFileFormat. However, we are getting " +
                 s"a ${relation.fileFormat} from the metastore cache. This cached " +
                 s"entry will be invalidated.")
-            sparkSession.sessionState.catalog.invalidateTable(tableIdentifier)
+            sparkSession.sessionState.catalog.refreshTable(tableIdentifier)
             None
         }
       case other =>
@@ -314,7 +314,7 @@ class ConvertMetastoreTables(sparkSession: SparkSession) extends Rule[LogicalPla
           s"${metastoreRelation.databaseName}.${metastoreRelation.tableName} should be stored " +
             s"as $expectedFileFormat. However, we are getting a $other from the metastore cache. " +
             s"This cached entry will be invalidated.")
-        sparkSession.sessionState.catalog.invalidateTable(tableIdentifier)
+        sparkSession.sessionState.catalog.refreshTable(tableIdentifier)
         None
     }
   }
