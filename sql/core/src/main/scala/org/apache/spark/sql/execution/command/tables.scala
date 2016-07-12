@@ -428,7 +428,13 @@ case class DescribeTableCommand(table: TableIdentifier, isExtended: Boolean, isF
   // Shows data columns and partitioned columns (if any)
   private def describe(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
     if (DDLUtils.isDatasourceTable(table)) {
-      DDLUtils.getSchemaFromTableProperties(table).foreach(describeSchema(_, buffer))
+      val schema = DDLUtils.getSchemaFromTableProperties(table)
+
+      if (schema.isEmpty) {
+        append(buffer, "# Schema of this table in catalog is corrupted", "", "")
+      } else {
+        schema.foreach(describeSchema(_, buffer))
+      }
 
       val partCols = DDLUtils.getPartitionColumnsFromTableProperties(table)
       if (partCols.nonEmpty) {
