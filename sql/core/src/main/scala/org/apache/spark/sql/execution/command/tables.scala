@@ -413,29 +413,23 @@ case class DescribeTableCommand(table: TableIdentifier, isExtended: Boolean, isF
     } else {
       val metadata = catalog.getTableMetadata(table)
 
-      if (DDLUtils.isDatasourceTable(metadata)) {
-        DDLUtils.getSchemaFromTableProperties(metadata) match {
-          case Some(userSpecifiedSchema) => describeSchema(userSpecifiedSchema, result)
-          case None => describeSchema(catalog.lookupRelation(table).schema, result)
-        }
-      } else {
-        describeSchema(metadata.schema, result)
-      }
-
       if (isExtended) {
         describeExtended(metadata, result)
       } else if (isFormatted) {
         describeFormatted(metadata, result)
       } else {
-        describePartitionInfo(metadata, result)
+        describe(metadata, result)
       }
     }
 
     result
   }
 
-  private def describePartitionInfo(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
+  // Shows data columns and partitioned columns (if any)
+  private def describe(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
     if (DDLUtils.isDatasourceTable(table)) {
+      DDLUtils.getSchemaFromTableProperties(table).foreach(describeSchema(_, buffer))
+
       val partCols = DDLUtils.getPartitionColumnsFromTableProperties(table)
       if (partCols.nonEmpty) {
         append(buffer, "# Partition Information", "", "")
@@ -443,6 +437,8 @@ case class DescribeTableCommand(table: TableIdentifier, isExtended: Boolean, isF
         partCols.foreach(col => append(buffer, col, "", ""))
       }
     } else {
+      describeSchema(table.schema, buffer)
+
       if (table.partitionColumns.nonEmpty) {
         append(buffer, "# Partition Information", "", "")
         append(buffer, s"# ${output.head.name}", output(1).name, output(2).name)
@@ -452,14 +448,14 @@ case class DescribeTableCommand(table: TableIdentifier, isExtended: Boolean, isF
   }
 
   private def describeExtended(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
-    describePartitionInfo(table, buffer)
+    describe(table, buffer)
 
     append(buffer, "", "", "")
     append(buffer, "# Detailed Table Information", table.toString, "")
   }
 
   private def describeFormatted(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
-    describePartitionInfo(table, buffer)
+    describe(table, buffer)
 
     append(buffer, "", "", "")
     append(buffer, "# Detailed Table Information", "", "")

@@ -95,7 +95,7 @@ case class CreateDataSourceTableCommand(
       }
 
     // Create the relation to validate the arguments before writing the metadata to the metastore.
-    DataSource(
+    val dataSource = DataSource(
       sparkSession = sparkSession,
       userSpecifiedSchema = userSpecifiedSchema,
       className = provider,
@@ -105,7 +105,7 @@ case class CreateDataSourceTableCommand(
     CreateDataSourceTableUtils.createDataSourceTable(
       sparkSession = sparkSession,
       tableIdent = tableIdent,
-      userSpecifiedSchema = userSpecifiedSchema,
+      userSpecifiedSchema = Some(dataSource.schema),
       partitionColumns = partitionColumns,
       bucketSpec = bucketSpec,
       provider = provider,
