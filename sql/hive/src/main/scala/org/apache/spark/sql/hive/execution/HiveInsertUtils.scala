@@ -174,7 +174,7 @@ case class HiveInsertUtils(
       throw new SparkException(
         s"""Requested partitioning does not match the ${table.catalogTable.qualifiedName} table:
             |Requested partitions: ${partition.keys.mkString(",")}
-            |Table partitions: ${table.partitionKeys.map(_.name).mkString(",")}""".stripMargin)
+            |Table partitions: ${table.partitionKeys.mkString(",")}""".stripMargin)
     }
 
     // Validate partition spec if there exist any dynamic partitions

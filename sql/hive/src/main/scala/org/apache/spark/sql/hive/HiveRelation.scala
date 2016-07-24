@@ -23,13 +23,12 @@ import org.apache.hadoop.hive.ql.metadata.{Table => HiveTable}
 import org.apache.hadoop.hive.ql.plan.TableDesc
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.catalog.{CatalogColumn, CatalogRelation, CatalogTable}
-import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.parser.CatalystSqlParser
-import org.apache.spark.sql.execution.FileRelation
-import org.apache.spark.sql.hive.execution.HiveInsertUtils
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.execution.{FileRelation, SparkPlan}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.hive.execution.{HiveInsertUtils, HiveRelationScanExec}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types.StructType
 
@@ -39,27 +38,14 @@ case class HiveRelation(
     catalogTable: CatalogTable,
     properties: Properties = new Properties())
   extends BaseRelation
-    with PrunedFilteredScan
-    // with CreatableRelationProvider
+    with PrunedFilteredHiveScan
     with InsertHiveRelation
     with FileRelation
-    with CatalogRelation
     with Logging {
 
   override def sqlContext: SQLContext = sparkSession.sqlContext
 
   override val needConversion: Boolean = false
-
-  implicit class SchemaAttribute(f: CatalogColumn) {
-    def toAttribute: AttributeReference = {
-      AttributeReference(
-        f.name,
-        CatalystSqlParser.parseDataType(f.dataType),
-        // Since data can be dumped in randomly with no validation, everything is nullable.
-        nullable = true
-      )(qualifier = Some(catalogTable.identifier.table))
-    }
-  }
 
   @transient val hiveQlTable: HiveTable = HiveUtils.toHiveTable(catalogTable)
 
@@ -74,21 +60,30 @@ case class HiveRelation(
   )
 
   /** PartitionKey attributes */
-  val partitionKeys = catalogTable.partitionColumns.map(_.toAttribute)
+  override lazy val partitionKeys: Seq[String] = catalogTable.partitionColumns.map(_.name)
 
-  /** Non-partitionKey attributes */
-  // TODO: just make this hold the schema itself, not just non-partition columns
-  val attributes = catalogTable.schema
-    .filter { c => !catalogTable.partitionColumnNames.contains(c.name) }
-    .map(_.toAttribute)
+  override val schema = StructType.fromCatalogTable(catalogTable)
 
-  override val output = attributes ++ partitionKeys
+  override def buildScan(
+      relation: LogicalRelation,
+      requestedAttributes: Seq[Attribute],
+      requestedPartitionAttributes: Seq[Attribute],
+      partitionPruningPred: Seq[Expression]): SparkPlan = {
+    // scalastyle:off println
+    println("scan build is started")
+    // scalastyle:on println
 
-  override val schema = StructType.fromAttributes(output)
+    val e = HiveRelationScanExec(
+      catalogTable = catalogTable,
+      requestedAttributes = requestedAttributes,
+      requestedPartitionAttributes = requestedPartitionAttributes,
+      partitionPruningPred = partitionPruningPred)(sparkSession)
 
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
-    // Rely on a type erasure hack to pass RDD[InternalRow] back as RDD[Row]
-    sparkSession.sparkContext.parallelize(0 to 10).map(Row(_))
+    // scalastyle:off println
+    println("scan build is done")
+    // scalastyle:on println
+
+    e
   }
 
   override def insert(
@@ -98,9 +93,9 @@ case class HiveRelation(
       ifNotExists: Boolean): Unit = {
     // scalastyle:off println
     println("insert is started")
+    // scalastyle:on println
 
     HiveInsertUtils(sparkSession, this, partition, data, overwrite, ifNotExists).doExecute()
-    // scalastyle:on println
 
     // scalastyle:off println
     println("insert is done")

@@ -33,8 +33,8 @@ import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.plans.physical.HashPartitioning
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.execution.{FilterExec, ProjectExec, SparkPlan}
 import org.apache.spark.sql.execution.DataSourceScanExec.PUSHED_FILTERS
-import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableUtils, DDLUtils, ExecutedCommandExec}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
@@ -215,6 +215,75 @@ private[sql] class FindDataSourceTable(sparkSession: SparkSession) extends Rule[
   }
 }
 
+/**
+ * A Strategy for planning scans over data sources defined using the sources API.
+ */
+private[sql] class HiveSourceStrategy(sparkSession: SparkSession) extends Strategy with Logging {
+  def apply(plan: LogicalPlan): Seq[execution.SparkPlan] = plan match {
+    case PhysicalOperation(
+        projects, filters, l @ LogicalRelation(t: PrunedFilteredHiveScan, _, _)) =>
+      // Filter out all predicates that only deal with partition keys, these are given to the
+      // hive table scan operator to be used for partition pruning.
+      val partitionColumns: Seq[Attribute] = t.partitionKeys.map { p =>
+        l.resolve(Seq(p), sparkSession.sessionState.analyzer.resolver)
+          .map(_.toAttribute).getOrElse { throw new AnalysisException("failed to resolve") }
+      }
+      val (partitionPruningPred, otherPredicates) = filters.partition { predicate =>
+        !predicate.references.isEmpty &&
+          predicate.references.subsetOf(AttributeSet(partitionColumns))
+      }
+
+      // Retrieve the original attributes based on expression ID so that capitalization matches.
+      val normalizedProject = projects.map(a => l.attributeMap(a.toAttribute))
+      val normalizedPartitionColumns = partitionColumns.map(l.attributeMap)
+
+      pruneFilterProject(
+        normalizedProject,
+        otherPredicates,
+        t.buildScan(
+          l,
+          _,
+          normalizedPartitionColumns,
+          partitionPruningPred)) :: Nil
+
+    case i @ logical.InsertIntoTable(
+    l @ LogicalRelation(t: InsertHiveRelation, _, _), part, query, overwrite, ifNotExists) =>
+      ExecutedCommandExec(
+        InsertIntoHiveDataSourceCommand(l, part, query, overwrite, ifNotExists)) :: Nil
+
+    case _ => Nil
+  }
+
+  def pruneFilterProject(
+      projectList: Seq[NamedExpression],
+      filterPredicates: Seq[Expression],
+      scanBuilder: Seq[Attribute] => SparkPlan): SparkPlan = {
+
+    val projectSet = AttributeSet(projectList.flatMap(_.references))
+    val filterSet = AttributeSet(filterPredicates.flatMap(_.references))
+    val filterCondition: Option[Expression] =
+      filterPredicates.reduceLeftOption(catalyst.expressions.And)
+
+    // Right now we still use a projection even if the only evaluation is applying an alias
+    // to a column.  Since this is a no-op, it could be avoided. However, using this
+    // optimization with the current implementation would change the output schema.
+    // TODO: Decouple final output schema from expression evaluation so this copy can be
+    // avoided safely.
+
+    if (AttributeSet(projectList.map(_.toAttribute)) == projectSet &&
+      filterSet.subsetOf(projectSet)) {
+      // When it is possible to just use column pruning to get the right projection and
+      // when the columns of this projection are enough to evaluate all filter conditions,
+      // just do a scan followed by a filter, with no extra project.
+      val scan = scanBuilder(projectList.asInstanceOf[Seq[Attribute]])
+      filterCondition.map(FilterExec(_, scan)).getOrElse(scan)
+    } else {
+      val scan = scanBuilder((projectSet ++ filterSet).toSeq)
+      ProjectExec(projectList, filterCondition.map(FilterExec(_, scan)).getOrElse(scan))
+    }
+  }
+
+}
 
 /**
  * A Strategy for planning scans over data sources defined using the sources API.
@@ -251,11 +320,6 @@ private[sql] object DataSourceStrategy extends Strategy with Logging {
           l @ LogicalRelation(t: InsertableRelation, _, _), part, query, overwrite, false)
         if part.isEmpty =>
       ExecutedCommandExec(InsertIntoDataSourceCommand(l, query, overwrite)) :: Nil
-
-    case i @ logical.InsertIntoTable(
-        l @ LogicalRelation(t: InsertHiveRelation, _, _), part, query, overwrite, ifNotExists) =>
-      ExecutedCommandExec(
-        InsertIntoHiveDataSourceCommand(l, part, query, overwrite, ifNotExists)) :: Nil
 
     case _ => Nil
   }

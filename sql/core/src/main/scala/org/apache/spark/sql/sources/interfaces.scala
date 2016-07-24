@@ -21,8 +21,9 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
@@ -292,14 +293,6 @@ trait InsertableRelation {
   def insert(data: DataFrame, overwrite: Boolean): Unit
 }
 
-trait InsertHiveRelation {
-  def insert(
-    partition: Map[String, Option[String]],
-    data: DataFrame,
-    overwrite: Boolean,
-    ifNotExists: Boolean): Unit
-}
-
 /**
  * ::Experimental::
  * An interface for experimenting with a more direct connection to the query planner.  Compared to
@@ -314,3 +307,22 @@ trait InsertHiveRelation {
 trait CatalystScan {
   def buildScan(requiredColumns: Seq[Attribute], filters: Seq[Expression]): RDD[Row]
 }
+
+trait PrunedFilteredHiveScan {
+  def buildScan(
+      relation: LogicalRelation,
+      requestedAttributes: Seq[Attribute],
+      requestedPartitionAttributes: Seq[Attribute],
+      partitionPruningPred: Seq[Expression]): SparkPlan
+
+  def partitionKeys: Seq[String]
+}
+
+trait InsertHiveRelation {
+  def insert(
+      partition: Map[String, Option[String]],
+      data: DataFrame,
+      overwrite: Boolean,
+      ifNotExists: Boolean): Unit
+}
+

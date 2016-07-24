@@ -1021,8 +1021,13 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
 
   test("insert") {
     withTable("test") {
-      sql("create table test (value int)")
-      sql("insert into table test values (3)")
+      withSQLConf(SQLConf.DATAFRAME_EAGER_ANALYSIS.key -> "false") {
+        sql("create table test (value int)")
+        sql("insert into table test values (3)")
+        // sql("select * from test").show(false)
+        // sql("select * from test").explain(true)
+        sql("select * from test where value > 2").show(false)
+      }
     }
   }
 

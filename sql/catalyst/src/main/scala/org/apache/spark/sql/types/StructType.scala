@@ -24,6 +24,7 @@ import org.json4s.JsonDSL._
 
 import org.apache.spark.SparkException
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, InterpretedOrdering}
 import org.apache.spark.sql.catalyst.parser.{CatalystSqlParser, LegacyTypeStringParser}
 import org.apache.spark.sql.catalyst.util.quoteIdentifier
@@ -426,6 +427,12 @@ object StructType extends AbstractDataType {
 
   private[sql] def fromAttributes(attributes: Seq[Attribute]): StructType =
     StructType(attributes.map(a => StructField(a.name, a.dataType, a.nullable, a.metadata)))
+
+  private[sql] def fromCatalogTable(table: CatalogTable): StructType =
+    StructType(table.schema.map { a =>
+      val field = StructField(a.name, CatalystSqlParser.parseDataType(a.dataType), a.nullable)
+      if (a.comment.nonEmpty) field.withComment(a.comment.get) else field
+    })
 
   private[sql] def removeMetadata(key: String, dt: DataType): DataType =
     dt match {

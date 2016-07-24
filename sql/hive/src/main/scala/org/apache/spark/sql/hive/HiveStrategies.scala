@@ -65,6 +65,7 @@ private[hive] trait HiveStrategies {
    * Retrieves data using a HiveTableScan.  Partition pruning predicates are also detected and
    * applied.
    */
+  // TODO: This can be removed now, since the table scan does not need MetastoreRelation
   object HiveTableScans extends Strategy {
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
       case PhysicalOperation(projectList, predicates, relation: MetastoreRelation) =>
