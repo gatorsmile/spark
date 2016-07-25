@@ -1031,6 +1031,16 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     }
   }
 
+  test("create hive table as select") {
+    withTable("test") {
+      withSQLConf(SQLConf.DATAFRAME_EAGER_ANALYSIS.key -> "false") {
+        sql("create table test as select 3 as value")
+        sql("describe test").show(false)
+        sql("select * from test where value > 2").show(false)
+      }
+    }
+  }
+
   test("dynamic partition value test") {
     try {
       sql("set hive.exec.dynamic.partition.mode=nonstrict")

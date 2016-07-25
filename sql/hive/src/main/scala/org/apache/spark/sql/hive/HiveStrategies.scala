@@ -88,27 +88,6 @@ private[hive] trait HiveStrategies {
   }
 }
 
-/**
- * Creates any tables required for query execution.
- * For example, because of a CREATE TABLE X AS statement.
- */
-private[hive] class CreateTables(sparkSession: SparkSession) extends Rule[LogicalPlan] {
-
-  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-    // Wait until children are resolved.
-    case p: LogicalPlan if !p.childrenResolved => p
-    case p: LogicalPlan if p.resolved => p
-
-    case p @ CreateHiveTableAsSelectLogicalPlan(table, child, allowExisting) =>
-      val catalog = sparkSession.sessionState.catalog
-      val db = table.identifier.database.getOrElse(catalog.getCurrentDatabase).toLowerCase
-
-      execution.CreateHiveTableAsSelectCommand(
-        table.copy(identifier = TableIdentifier(table.identifier.table, Some(db))),
-        child,
-        allowExisting)
-  }
-}
 
 /**
  * When scanning or writing to non-partitioned Metastore Parquet tables, convert them to Parquet

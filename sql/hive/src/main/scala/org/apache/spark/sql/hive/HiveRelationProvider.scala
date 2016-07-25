@@ -19,23 +19,28 @@ package org.apache.spark.sql.hive
 
 import java.util.Properties
 
-import org.apache.spark.sql.SQLContext
-import org.apache.spark.sql.sources.{BaseRelation, DataSourceRegister, RelationProvider}
+import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.sources.{CreateHiveTableRelationAsSelectProvider, DataSourceRegister}
 
-class HiveRelationProvider extends RelationProvider with DataSourceRegister {
+class HiveRelationProvider
+  extends DataSourceRegister with CreateHiveTableRelationAsSelectProvider {
 
   override def shortName(): String = "hive"
 
-  /** Returns a new base relation with the given parameters. */
   override def createRelation(
       sqlContext: SQLContext,
-      parameters: Map[String, String]): BaseRelation = {
-    val hiveOptions = new HiveOptions(parameters)
-    val tableIdent = sqlContext.sessionState.sqlParser.parseTableIdentifier(hiveOptions.table)
-    val catalogTable = sqlContext.sessionState.catalog.getTableMetadata(tableIdent)
+      mode: SaveMode,
+      tableDesc: CatalogTable,
+      parameters: Map[String, String],
+      query: LogicalPlan): Unit = {
+    // val hiveOptions = new HiveOptions(parameters)
 
     val properties = new Properties()
     parameters.foreach(kv => properties.setProperty(kv._1, kv._2))
-    HiveRelation(sqlContext.sparkSession, catalogTable, properties)
+    HiveRelation(sqlContext.sparkSession, tableDesc, properties)
+      .createTableAsSelect(tableDesc, query, mode == SaveMode.Ignore)
   }
+
 }

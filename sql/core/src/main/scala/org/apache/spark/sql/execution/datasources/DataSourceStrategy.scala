@@ -22,7 +22,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
-import org.apache.spark.sql.catalyst.{CatalystConf, CatalystTypeConverters, InternalRow}
+import org.apache.spark.sql.catalyst._
 import org.apache.spark.sql.catalyst.CatalystTypeConverters.convertToScala
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, SimpleCatalogRelation}
@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.plans.physical.HashPartitioning
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.{FilterExec, ProjectExec, SparkPlan}
 import org.apache.spark.sql.execution.DataSourceScanExec.PUSHED_FILTERS
-import org.apache.spark.sql.execution.command.{CreateDataSourceTableUtils, DDLUtils, ExecutedCommandExec}
+import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
@@ -216,12 +216,35 @@ private[sql] class FindDataSourceTable(sparkSession: SparkSession) extends Rule[
 }
 
 /**
+ * Creates any tables required for query execution.
+ * For example, because of a CREATE TABLE X AS statement.
+ */
+class CreateTables(sparkSession: SparkSession) extends Rule[LogicalPlan] {
+
+  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    // Wait until children are resolved.
+    case p: LogicalPlan if !p.childrenResolved => p
+    case p: LogicalPlan if p.resolved => p
+
+    case p @ CreateHiveTableAsSelectLogicalPlan(table, child, allowExisting) =>
+      // relation.createTableAsSelect(tableDesc, query, ignoreIfExists)
+      val catalog = sparkSession.sessionState.catalog
+      val db = table.identifier.database.getOrElse(catalog.getCurrentDatabase).toLowerCase
+
+      CreateHiveTableAsSelectCommand(
+        table.copy(identifier = TableIdentifier(table.identifier.table, Some(db))),
+        child,
+        allowExisting)
+  }
+}
+
+/**
  * A Strategy for planning scans over data sources defined using the sources API.
  */
 private[sql] class HiveSourceStrategy(sparkSession: SparkSession) extends Strategy with Logging {
   def apply(plan: LogicalPlan): Seq[execution.SparkPlan] = plan match {
     case PhysicalOperation(
-        projects, filters, l @ LogicalRelation(t: PrunedFilteredHiveScan, _, _)) =>
+        projects, filters, l @ LogicalRelation(t: HiveTableRelation, _, _)) =>
       // Filter out all predicates that only deal with partition keys, these are given to the
       // hive table scan operator to be used for partition pruning.
       val partitionColumns: Seq[Attribute] = t.partitionKeys.map { p =>
@@ -247,7 +270,7 @@ private[sql] class HiveSourceStrategy(sparkSession: SparkSession) extends Strate
           partitionPruningPred)) :: Nil
 
     case i @ logical.InsertIntoTable(
-    l @ LogicalRelation(t: InsertHiveRelation, _, _), part, query, overwrite, ifNotExists) =>
+    l @ LogicalRelation(t: HiveTableRelation, _, _), part, query, overwrite, ifNotExists) =>
       ExecutedCommandExec(
         InsertIntoHiveDataSourceCommand(l, part, query, overwrite, ifNotExists)) :: Nil
 

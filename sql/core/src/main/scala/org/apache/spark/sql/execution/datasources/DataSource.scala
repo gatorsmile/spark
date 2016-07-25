@@ -19,6 +19,9 @@ package org.apache.spark.sql.execution.datasources
 
 import java.util.ServiceLoader
 
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+
 import scala.collection.JavaConverters._
 import scala.language.{existentials, implicitConversions}
 import scala.util.{Failure, Success, Try}
@@ -129,6 +132,7 @@ case class DataSource(
     serviceLoader.asScala.filter(_.shortName().equalsIgnoreCase(provider)).toList match {
       // the provider format did not match any given registered aliases
       case Nil =>
+        val m = provider
         try {
           Try(loader.loadClass(provider)).orElse(Try(loader.loadClass(provider2))) match {
             case Success(dataSource) =>
@@ -423,6 +427,22 @@ case class DataSource(
     relation
   }
 
+  def write(
+      tableDesc: CatalogTable,
+      mode: SaveMode,
+      query: LogicalPlan): Unit = {
+    if (query.schema.map(_.dataType).exists(_.isInstanceOf[CalendarIntervalType])) {
+      throw new AnalysisException("Cannot save interval data type into external storage.")
+    }
+
+    providingClass.newInstance() match {
+      case dataSource: CreateHiveTableRelationAsSelectProvider =>
+        dataSource.createRelation(sparkSession.sqlContext, mode, tableDesc, options, query)
+      case _ =>
+        sys.error(s"${providingClass.getCanonicalName} does not allow create table as query.")
+    }
+  }
+
   /** Writes the give [[DataFrame]] out to this [[DataSource]]. */
   def write(
       mode: SaveMode,
@@ -434,6 +454,8 @@ case class DataSource(
     providingClass.newInstance() match {
       case dataSource: CreatableRelationProvider =>
         dataSource.createRelation(sparkSession.sqlContext, mode, options, data)
+      case dataSource: CreateHiveTableRelationAsSelectProvider =>
+        throw new AnalysisException(s"This API is not supported by Hive Tables.")
       case format: FileFormat =>
         // Don't glob path for the write path.  The contracts here are:
         //  1. Only one output path can be specified on the write path;

@@ -27,7 +27,7 @@ import scala.util.Try
 
 import org.apache.hadoop.fs.Path
 
-import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
+import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogColumn, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType._
@@ -35,7 +35,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{Command, LogicalPlan, UnaryNode}
 import org.apache.spark.sql.catalyst.util.quoteIdentifier
-import org.apache.spark.sql.execution.datasources.PartitioningUtils
+import org.apache.spark.sql.execution.datasources.{DataSource, PartitioningUtils}
 import org.apache.spark.sql.types._
 import org.apache.spark.util.Utils
 
@@ -53,6 +53,50 @@ case class CreateHiveTableAsSelectLogicalPlan(
       tableDesc.storage.inputFormat.isDefined &&
       tableDesc.storage.outputFormat.isDefined &&
       childrenResolved
+}
+
+/**
+ * Create table and insert the query result into it.
+ *
+ * @param tableDesc the Table Describe, which may contains serde, storage handler etc.
+ * @param query the query whose result will be insert into the new relation
+ * @param ignoreIfExists allow continue working if it's already exists, otherwise
+ *                      raise exception
+ */
+case class CreateHiveTableAsSelectCommand(
+    tableDesc: CatalogTable,
+    query: LogicalPlan,
+    ignoreIfExists: Boolean)
+  extends RunnableCommand {
+
+  override def children: Seq[LogicalPlan] = Seq(query)
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val catalog = sparkSession.sessionState.catalog
+
+    val dataSource = DataSource(
+      sparkSession,
+      className = "org.apache.spark.sql.hive",
+      options = Map("dbtable" -> tableDesc.identifier.quotedString))
+
+    val mode: SaveMode = if (ignoreIfExists) SaveMode.Ignore else SaveMode.ErrorIfExists
+
+    try {
+      dataSource.write(tableDesc, mode, query)
+    } catch {
+      case ex: AnalysisException =>
+        logError(s"Failed to write to table ${tableDesc.identifier} in $mode mode", ex)
+        throw ex
+    }
+
+    Seq.empty[Row]
+  }
+
+  override def argString: String = {
+    s"[Database:${tableDesc.database}}, " +
+      s"TableName: ${tableDesc.identifier.table}, " +
+      s"InsertIntoHiveTable]"
+  }
 }
 
 /**

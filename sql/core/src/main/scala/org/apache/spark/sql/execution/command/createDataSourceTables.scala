@@ -31,7 +31,7 @@ import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.internal.HiveSerDe
-import org.apache.spark.sql.sources.{InsertableRelation, InsertHiveRelation}
+import org.apache.spark.sql.sources.{HiveTableRelation, InsertableRelation}
 import org.apache.spark.sql.types._
 
 /**
@@ -197,7 +197,7 @@ case class CreateDataSourceTableAsSelectCommand(
           EliminateSubqueryAliases(
             sessionState.catalog.lookupRelation(tableIdent)) match {
             case l @ LogicalRelation(
-                _: InsertableRelation | _: InsertHiveRelation | _: HadoopFsRelation, _, _) =>
+                _: InsertableRelation | _: HiveTableRelation | _: HadoopFsRelation, _, _) =>
               // check if the file formats match
               l.relation match {
                 case r: HadoopFsRelation if r.fileFormat.getClass != dataSource.providingClass =>

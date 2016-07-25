@@ -21,7 +21,9 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
@@ -308,7 +310,22 @@ trait CatalystScan {
   def buildScan(requiredColumns: Seq[Attribute], filters: Seq[Expression]): RDD[Row]
 }
 
-trait PrunedFilteredHiveScan {
+
+trait CreateHiveTableRelationAsSelectProvider {
+  /**
+   * Save the DataFrame to the destination and return a relation with the given parameters based on
+   * the contents of the given DataFrame.
+   */
+  def createRelation(
+      sqlContext: SQLContext,
+      mode: SaveMode,
+      tableDesc: CatalogTable,
+      parameters: Map[String, String],
+      query: LogicalPlan): Unit
+}
+
+
+trait HiveTableRelation {
   def buildScan(
       relation: LogicalRelation,
       requestedAttributes: Seq[Attribute],
@@ -316,13 +333,16 @@ trait PrunedFilteredHiveScan {
       partitionPruningPred: Seq[Expression]): SparkPlan
 
   def partitionKeys: Seq[String]
-}
 
-trait InsertHiveRelation {
   def insert(
       partition: Map[String, Option[String]],
       data: DataFrame,
       overwrite: Boolean,
       ifNotExists: Boolean): Unit
+
+  def createTableAsSelect(
+      tableDesc: CatalogTable,
+      query: LogicalPlan,
+      ignoreIfExists: Boolean): Seq[Row]
 }
 

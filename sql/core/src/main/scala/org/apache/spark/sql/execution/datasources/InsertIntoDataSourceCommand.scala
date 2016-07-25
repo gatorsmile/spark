@@ -21,7 +21,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.RunnableCommand
-import org.apache.spark.sql.sources.{InsertableRelation, InsertHiveRelation}
+import org.apache.spark.sql.sources.{HiveTableRelation, InsertableRelation}
 
 
 /**
@@ -60,7 +60,7 @@ private[sql] case class InsertIntoHiveDataSourceCommand(
   override protected def innerChildren: Seq[QueryPlan[_]] = Seq(query)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val relation = logicalRelation.relation.asInstanceOf[InsertHiveRelation]
+    val relation = logicalRelation.relation.asInstanceOf[HiveTableRelation]
     val data = Dataset.ofRows(sparkSession, query)
     // Apply the schema of the existing table to the new data.
     val df = sparkSession.internalCreateDataFrame(data.queryExecution.toRdd, logicalRelation.schema)
