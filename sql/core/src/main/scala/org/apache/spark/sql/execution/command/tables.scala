@@ -27,7 +27,7 @@ import scala.util.Try
 
 import org.apache.hadoop.fs.Path
 
-import org.apache.spark.sql.{AnalysisException, Row, SaveMode, SparkSession}
+import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogColumn, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType._
@@ -72,8 +72,6 @@ case class CreateHiveTableAsSelectCommand(
   override def children: Seq[LogicalPlan] = Seq(query)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val catalog = sparkSession.sessionState.catalog
-
     val dataSource = DataSource(
       sparkSession,
       className = "org.apache.spark.sql.hive",
@@ -81,8 +79,10 @@ case class CreateHiveTableAsSelectCommand(
 
     val mode: SaveMode = if (ignoreIfExists) SaveMode.Ignore else SaveMode.ErrorIfExists
 
+    val data = Dataset.ofRows(sparkSession, query)
+
     try {
-      dataSource.write(tableDesc, mode, query)
+      dataSource.write(tableDesc, mode, data)
     } catch {
       case ex: AnalysisException =>
         logError(s"Failed to write to table ${tableDesc.identifier} in $mode mode", ex)

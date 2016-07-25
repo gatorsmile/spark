@@ -34,13 +34,13 @@ class HiveRelationProvider
       mode: SaveMode,
       tableDesc: CatalogTable,
       parameters: Map[String, String],
-      query: LogicalPlan): Unit = {
+      data: DataFrame): Unit = {
     // val hiveOptions = new HiveOptions(parameters)
 
     val properties = new Properties()
     parameters.foreach(kv => properties.setProperty(kv._1, kv._2))
     HiveRelation(sqlContext.sparkSession, tableDesc, properties)
-      .createTableAsSelect(tableDesc, query, mode == SaveMode.Ignore)
+      .createTableAsSelect(tableDesc, data.logicalPlan, mode == SaveMode.Ignore)
   }
 
 }

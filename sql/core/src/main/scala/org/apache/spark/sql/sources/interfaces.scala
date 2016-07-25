@@ -321,7 +321,7 @@ trait CreateHiveTableRelationAsSelectProvider {
       mode: SaveMode,
       tableDesc: CatalogTable,
       parameters: Map[String, String],
-      query: LogicalPlan): Unit
+      data: DataFrame): Unit
 }
 
 

@@ -430,14 +430,14 @@ case class DataSource(
   def write(
       tableDesc: CatalogTable,
       mode: SaveMode,
-      query: LogicalPlan): Unit = {
-    if (query.schema.map(_.dataType).exists(_.isInstanceOf[CalendarIntervalType])) {
+      data: DataFrame): Unit = {
+    if (data.schema.map(_.dataType).exists(_.isInstanceOf[CalendarIntervalType])) {
       throw new AnalysisException("Cannot save interval data type into external storage.")
     }
 
     providingClass.newInstance() match {
       case dataSource: CreateHiveTableRelationAsSelectProvider =>
-        dataSource.createRelation(sparkSession.sqlContext, mode, tableDesc, options, query)
+        dataSource.createRelation(sparkSession.sqlContext, mode, tableDesc, options, data)
       case _ =>
         sys.error(s"${providingClass.getCanonicalName} does not allow create table as query.")
     }

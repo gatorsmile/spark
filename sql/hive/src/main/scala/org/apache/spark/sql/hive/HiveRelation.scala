@@ -124,7 +124,7 @@ case class HiveRelation(
       tableDesc: CatalogTable,
       query: LogicalPlan,
       ignoreIfExists: Boolean): Seq[Row] = {
-    lazy val metastoreRelation: LogicalRelation = {
+    lazy val hiveRelation: LogicalRelation = {
       import org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat
       import org.apache.hadoop.hive.serde2.`lazy`.LazySimpleSerDe
       import org.apache.hadoop.io.Text
@@ -169,7 +169,7 @@ case class HiveRelation(
     } else {
       try {
         sparkSession.sessionState.executePlan(InsertIntoTable(
-          metastoreRelation, Map(), query, overwrite = true, ifNotExists = false)).toRdd
+          hiveRelation, Map(), query, overwrite = true, ifNotExists = false)).toRdd
       } catch {
         case NonFatal(e) =>
           // drop the created table.
