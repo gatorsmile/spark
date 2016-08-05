@@ -23,11 +23,11 @@ import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import org.apache.hadoop.fs.Path
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
+import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.logical
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules._
 import org.apache.spark.sql.execution.command.CreateDataSourceTableUtils._
@@ -35,6 +35,7 @@ import org.apache.spark.sql.execution.command.CreateHiveTableAsSelectLogicalPlan
 import org.apache.spark.sql.execution.datasources.{Partition => _, _}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetOptions}
 import org.apache.spark.sql.hive.orc.OrcFileFormat
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 
 
@@ -427,32 +428,55 @@ private[hive] class HiveMetastoreCatalog(sparkSession: SparkSession) extends Log
       }
     }
   }
+}
 
-  /**
-   * Creates any tables required for query execution.
-   * For example, because of a CREATE TABLE X AS statement.
-   */
-  object CreateTables extends Rule[LogicalPlan] {
-    def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-      // Wait until children are resolved.
-      case p: LogicalPlan if !p.childrenResolved => p
-      case p: LogicalPlan if p.resolved => p
+/**
+ * Creates any tables required for query execution.
+ * For example, because of a CREATE TABLE X AS statement.
+ */
+case class CreateTables(catalog: SessionCatalog, conf: SQLConf) extends Rule[LogicalPlan] {
+  def apply(plan: LogicalPlan): LogicalPlan = plan transform {
+    // Wait until children are resolved.
+    case p: LogicalPlan if !p.childrenResolved => p
 
-      case p @ CreateHiveTableAsSelectLogicalPlan(table, child, allowExisting) =>
-        val desc = if (table.storage.serde.isEmpty) {
-          // add default serde
-          table.withNewStorage(
-            serde = Some("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"))
-        } else {
-          table
-        }
+    case p @ CreateHiveTableAsSelectLogicalPlan(table, child, allowExisting) =>
+      val desc = if (table.storage.serde.isEmpty) {
+        // add default serde
+        table.withNewStorage(
+          serde = Some("org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe"))
+      } else {
+        table
+      }
 
-        val QualifiedTableName(dbName, tblName) = getQualifiedTableName(table)
+      execution.CreateHiveTableAsSelectCommand(
+        desc.copy(identifier = getQualifiedTableName(table.identifier)),
+        child,
+        allowExisting)
 
-        execution.CreateHiveTableAsSelectCommand(
-          desc.copy(identifier = TableIdentifier(tblName, Some(dbName))),
-          child,
-          allowExisting)
+    case c: CreateTableUsingAsSelect
+        if c.mode == SaveMode.Append && catalog.tableExists(c.tableIdent) =>
+      catalog.lookupRelation(c.tableIdent) match {
+        case m: MetastoreRelation =>
+          val tableDesc = catalog.getTableMetadata(c.tableIdent)
+          val newOutput = c.child.resolve(tableDesc.schema, resolver)
+          InsertIntoTable(
+            m, Map(), child = Project(newOutput, c.child), overwrite = false, ifNotExists = false)
+        case _ =>
+          c
+      }
+  }
+
+  def getQualifiedTableName(tableIdentifier: TableIdentifier): TableIdentifier = {
+    val dbName = tableIdentifier.database.getOrElse(catalog.getCurrentDatabase)
+    val tblName = tableIdentifier.table
+    TableIdentifier(tblName, Some(dbName))
+  }
+
+  def resolver: Resolver = {
+    if (conf.caseSensitiveAnalysis) {
+      caseSensitiveResolution
+    } else {
+      caseInsensitiveResolution
     }
   }
 }
