@@ -413,7 +413,7 @@ class MetastoreDataSourcesSuite extends QueryTest with SQLTestUtils with TestHiv
     }
   }
 
-  test("saveAsTable(CTAS) when the source DataFrame is built on a Hive table") {
+  test("saveAsTable(CTAS) using append when the source DataFrame is built on a Hive table") {
     val tableName = "tab1"
     withTable(tableName) {
       sql(s"CREATE TABLE $tableName stored as SEQUENCEFILE as select 1 as key, 'abc' as value")
@@ -444,6 +444,18 @@ class MetastoreDataSourcesSuite extends QueryTest with SQLTestUtils with TestHiv
         df3.write.mode(SaveMode.Append).saveAsTable(tableName)
       }.getMessage
       assert(e.contains("cannot resolve '`key`' given input columns: [value, non_existent]"))
+    }
+  }
+
+  test("saveAsTable(CTAS) using overwrite when the source DataFrame is built on a Hive table") {
+    val tableName = "tab1"
+    withTable(tableName) {
+      sql(s"CREATE TABLE $tableName stored as SEQUENCEFILE as select 1 as key, 'abc' as value")
+      val df = sql(s"select key, value from $tableName")
+      val e = intercept[AnalysisException] {
+        df.write.mode(SaveMode.Overwrite).saveAsTable(tableName)
+      }.getMessage
+      assert(e.contains("CTAS for hive serde tables does not support overwrite semantics"))
     }
   }
 

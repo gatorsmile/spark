@@ -380,6 +380,13 @@ final class DataFrameWriter[T] private[sql](ds: Dataset[T]) {
           CatalogTableType.MANAGED
         }
 
+        if (mode == SaveMode.Overwrite || mode == SaveMode.Append) {
+          val tableMeta = df.sparkSession.sessionState.catalog.getTableMetadataOption(tableIdent)
+          if (tableMeta.isDefined && DDLUtils.isHiveSerdeTable(tableMeta.get)) {
+            source = DDLUtils.HIVE_PROVIDER
+          }
+        }
+
         val tableDesc = CatalogTable(
           identifier = tableIdent,
           tableType = tableType,

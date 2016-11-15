@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive
 
 import org.apache.spark.sql._
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, NoSuchTableException}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning._
 import org.apache.spark.sql.catalyst.plans._
@@ -58,21 +59,41 @@ private[hive] trait HiveStrategies {
           tableDesc
         }
 
-        // Currently we will never hit this branch, as SQL string API can only use `Ignore` or
-        // `ErrorIfExists` mode, and `DataFrameWriter.saveAsTable` doesn't support hive serde
-        // tables yet.
-        if (mode == SaveMode.Append || mode == SaveMode.Overwrite) {
-          throw new AnalysisException(
-            "CTAS for hive serde tables does not support append or overwrite semantics.")
+        // SQL string API can only use `Ignore` or `ErrorIfExists` mode.
+        // `DataFrameWriter.saveAsTable` doesn't fully support hive serde tables yet. For backward
+        // compatibility, `DataFrameWriter.saveAsTable` can use `Append` mode to the existing hive
+        // serde table.
+        mode match {
+          case SaveMode.Overwrite =>
+            throw new AnalysisException(
+              "CTAS for hive serde tables does not support overwrite semantics")
+          case SaveMode.Append =>
+            val catalog = sparkSession.sessionState.catalog
+            EliminateSubqueryAliases(catalog.lookupRelation(tableDesc.identifier)) match {
+              case metastoreRelation: MetastoreRelation =>
+                val schema = metastoreRelation.catalogTable.schema
+                val data = Dataset.ofRows(sparkSession, query).selectExpr(schema.fieldNames: _*)
+                InsertIntoHiveTable(
+                  metastoreRelation,
+                  Map(),
+                  planLater(data.logicalPlan),
+                  overwrite = false,
+                  ifNotExists = false) :: Nil
+              case _ =>
+                // Currently we will never hit this branch, unless users manually drop the table
+                // in parallel.
+                throw new AnalysisException("CTAS for hive serde tables does not support append " +
+                  "semantics when hive serde table does not exist")
+            }
+          case _ =>
+            val dbName = tableDesc.identifier.database.getOrElse(
+              sparkSession.catalog.currentDatabase)
+            val cmd = CreateHiveTableAsSelectCommand(
+              newTableDesc.copy(identifier = tableDesc.identifier.copy(database = Some(dbName))),
+              query,
+              mode == SaveMode.Ignore)
+            ExecutedCommandExec(cmd) :: Nil
         }
-
-        val dbName = tableDesc.identifier.database.getOrElse(sparkSession.catalog.currentDatabase)
-        val cmd = CreateHiveTableAsSelectCommand(
-          newTableDesc.copy(identifier = tableDesc.identifier.copy(database = Some(dbName))),
-          query,
-          mode == SaveMode.Ignore)
-        ExecutedCommandExec(cmd) :: Nil
-
       case _ => Nil
     }
   }
