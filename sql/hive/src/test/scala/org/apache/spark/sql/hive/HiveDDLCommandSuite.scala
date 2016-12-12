@@ -40,7 +40,7 @@ class HiveDDLCommandSuite extends PlanTest with SQLTestUtils with TestHiveSingle
 
   private def extractTableDesc(sql: String): (CatalogTable, Boolean) = {
     parser.parsePlan(sql).collect {
-      case CreateTable(tableDesc, mode, _) => (tableDesc, mode == SaveMode.Ignore)
+      case CreateTable(tableDesc, ignoreIfExists, _) => (tableDesc, ignoreIfExists)
     }.head
   }
 

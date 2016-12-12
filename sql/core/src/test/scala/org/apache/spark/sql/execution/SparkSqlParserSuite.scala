@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.execution
 
-import org.apache.spark.sql.SaveMode
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.parser.ParseException
@@ -100,7 +99,7 @@ class SparkSqlParserSuite extends PlanTest {
       provider: Option[String] = Some("parquet"),
       partitionColumnNames: Seq[String] = Seq.empty,
       bucketSpec: Option[BucketSpec] = None,
-      mode: SaveMode = SaveMode.ErrorIfExists,
+      ignoreIfExists: Boolean = false,
       query: Option[LogicalPlan] = None): CreateTable = {
     CreateTable(
       CatalogTable(
@@ -111,7 +110,7 @@ class SparkSqlParserSuite extends PlanTest {
         provider = provider,
         partitionColumnNames = partitionColumnNames,
         bucketSpec = bucketSpec
-      ), mode, query
+      ), ignoreIfExists, query
     )
   }
 
@@ -126,7 +125,7 @@ class SparkSqlParserSuite extends PlanTest {
       provider: Option[String] = Some("hive"),
       partitionColumnNames: Seq[String] = Seq.empty,
       comment: Option[String] = None,
-      mode: SaveMode = SaveMode.ErrorIfExists,
+      ignoreIfExists: Boolean = false,
       query: Option[LogicalPlan] = None): CreateTable = {
     CreateTable(
       CatalogTable(
@@ -137,7 +136,7 @@ class SparkSqlParserSuite extends PlanTest {
         provider = provider,
         partitionColumnNames = partitionColumnNames,
         comment = comment
-      ), mode, query
+      ), ignoreIfExists, query
     )
   }
 

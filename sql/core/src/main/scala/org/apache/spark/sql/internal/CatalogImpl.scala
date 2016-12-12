@@ -358,7 +358,7 @@ class CatalogImpl(sparkSession: SparkSession) extends Catalog {
       schema = schema,
       provider = Some(source)
     )
-    val plan = CreateTable(tableDesc, SaveMode.ErrorIfExists, None)
+    val plan = CreateTable(tableDesc, ignoreIfExists = false, query = None)
     sparkSession.sessionState.executePlan(plan).toRdd
     sparkSession.table(tableIdent)
   }

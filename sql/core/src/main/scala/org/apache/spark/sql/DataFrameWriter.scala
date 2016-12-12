@@ -23,11 +23,12 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.annotation.InterfaceStability
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.plans.logical.InsertIntoTable
-import org.apache.spark.sql.execution.command.{AlterTableRecoverPartitionsCommand, DDLUtils}
-import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, HadoopFsRelation}
+import org.apache.spark.sql.execution.command.DDLUtils
+import org.apache.spark.sql.execution.datasources.{CreateTable, DataSource, HadoopFsRelation, LogicalRelation}
+import org.apache.spark.sql.sources.{BaseRelation, InsertableRelation}
 import org.apache.spark.sql.types.StructType
 
 /**
@@ -363,46 +364,118 @@ final class DataFrameWriter[T] private[sql](ds: Dataset[T]) {
       throw new AnalysisException("Cannot create hive serde table with saveAsTable API")
     }
 
-    val tableExists = df.sparkSession.sessionState.catalog.tableExists(tableIdent)
+    val catalog = df.sparkSession.sessionState.catalog
+    val db = tableIdent.database.getOrElse(catalog.getCurrentDatabase)
+    val tableIdentWithDB = tableIdent.copy(database = Some(db))
+    catalog.getTableMetadataOption(tableIdent) match {
+      // If the table already exists...
+      case Some(tableMeta) =>
+        mode match {
+          case SaveMode.Ignore => // Do nothing
 
-    (tableExists, mode) match {
-      case (true, SaveMode.Ignore) =>
-        // Do nothing
+          case SaveMode.ErrorIfExists =>
+            throw new AnalysisException(s"Table $tableIdent already exists. You can set SaveMode " +
+              "to SaveMode.Append to insert data into the table or set SaveMode to " +
+              "SaveMode.Overwrite to overwrite the existing data.")
 
-      case (true, SaveMode.ErrorIfExists) =>
-        throw new AnalysisException(s"Table $tableIdent already exists.")
+          case SaveMode.Append =>
+            // Check if the specified data source match the data source of the existing table.
+            val specifiedProvider = DataSource.lookupDataSource(source)
+            // TODO: Check that options from the resolved relation match the relation that we are
+            // inserting into (i.e. using the same compression).
 
-      case _ =>
-        val existingTable = if (tableExists) {
-          Some(df.sparkSession.sessionState.catalog.getTableMetadata(tableIdent))
-        } else {
-          None
+            // Pass a table identifier with database part, so that `lookupRelation` won't get temp
+            // views unexpectedly.
+            EliminateSubqueryAliases(catalog.lookupRelation(tableIdentWithDB)) match {
+              case l @ LogicalRelation(_: InsertableRelation | _: HadoopFsRelation, _, _) =>
+                // check if the file formats match
+                l.relation match {
+                  case r: HadoopFsRelation if r.fileFormat.getClass != specifiedProvider =>
+                    throw new AnalysisException(
+                      s"The file format of the existing table $tableIdent is " +
+                        s"`${r.fileFormat.getClass.getName}`. It doesn't match the specified " +
+                        s"format `$source`")
+                  case _ =>
+                }
+              case s: SimpleCatalogRelation if DDLUtils.isDatasourceTable(s.metadata) => // OK.
+              case c: CatalogRelation if c.catalogTable.provider == Some(DDLUtils.HIVE_PROVIDER) =>
+                throw new AnalysisException("Saving data in the Hive serde table " +
+                  s"${c.catalogTable.identifier} is not supported yet. Please use the " +
+                  "insertInto() API as an alternative..")
+              case o =>
+                throw new AnalysisException(s"Saving data in ${o.toString} is not supported.")
+            }
+
+            val existingSchema = tableMeta.schema
+            if (df.logicalPlan.schema.size != existingSchema.size) {
+              throw new AnalysisException(
+                s"The column number of the existing schema[$existingSchema] " +
+                  s"doesn't match the data schema[${df.logicalPlan.schema}]")
+            }
+
+            val specifiedPartCols = partitioningColumns.getOrElse(Nil)
+            val existingPartCols = tableMeta.partitionColumnNames
+            if (specifiedPartCols.map(_.toLowerCase) != existingPartCols.map(_.toLowerCase)) {
+              throw new AnalysisException("The partition columns of the existing table " +
+                s"$tableIdent are: [${existingPartCols.mkString(", ")}]. It doesn't match the " +
+                s"specified partition columns: [${specifiedPartCols.mkString(", ")}]")
+            }
+
+            // Because we are inserting into an existing table, we should respect the existing
+            // schema and adjust columns order of the given dataframe according to it.
+            df.select(existingSchema.map(f => Column(f.name)): _*)
+              .write.insertInto(tableIdentWithDB)
+
+          case SaveMode.Overwrite =>
+            EliminateSubqueryAliases(catalog.lookupRelation(tableIdentWithDB)) match {
+              // Only do the check if the table is a data source table
+              // (the relation is a BaseRelation).
+              case LogicalRelation(dest: BaseRelation, _, _) =>
+                // Get all input data source relations of the query.
+                val srcRelations = df.logicalPlan.collect {
+                  case LogicalRelation(src: BaseRelation, _, _) => src
+                }
+                if (srcRelations.contains(dest)) {
+                  throw new AnalysisException(
+                    s"Cannot overwrite table $tableIdent that is also being read from")
+                }
+              case _ => // OK
+            }
+
+            // Drop the existing table and create it again.
+            df.sparkSession.sessionState.catalog.dropTable(
+              tableIdentWithDB,
+              ignoreIfNotExists = true,
+              purge = false)
+            createTable(tableIdentWithDB)
         }
-        val storage = if (tableExists) {
-          existingTable.get.storage
-        } else {
-          DataSource.buildStorageFormatFromOptions(extraOptions.toMap)
-        }
-        val tableType = if (tableExists) {
-          existingTable.get.tableType
-        } else if (storage.locationUri.isDefined) {
-          CatalogTableType.EXTERNAL
-        } else {
-          CatalogTableType.MANAGED
-        }
 
-        val tableDesc = CatalogTable(
-          identifier = tableIdent,
-          tableType = tableType,
-          storage = storage,
-          schema = new StructType,
-          provider = Some(source),
-          partitionColumnNames = partitioningColumns.getOrElse(Nil),
-          bucketSpec = getBucketSpec
-        )
-        df.sparkSession.sessionState.executePlan(
-          CreateTable(tableDesc, mode, Some(df.logicalPlan))).toRdd
+      // If the table doesn't exist...
+      case None => createTable(tableIdentWithDB)
     }
+  }
+
+  private def createTable(tableIdent: TableIdentifier): Unit = {
+    val storage = DataSource.buildStorageFormatFromOptions(extraOptions.toMap)
+    val tableType = if (storage.locationUri.isDefined) {
+      CatalogTableType.EXTERNAL
+    } else {
+      CatalogTableType.MANAGED
+    }
+
+    val tableDesc = CatalogTable(
+      identifier = tableIdent,
+      tableType = tableType,
+      storage = storage,
+      schema = new StructType,
+      provider = Some(source),
+      partitionColumnNames = partitioningColumns.getOrElse(Nil),
+      bucketSpec = getBucketSpec)
+
+    df.sparkSession.sessionState.executePlan(CreateTable(
+      tableDesc = tableDesc,
+      ignoreIfExists = false,
+      query = Some(df.logicalPlan))).toRdd
   }
 
   /**
@@ -440,7 +513,7 @@ final class DataFrameWriter[T] private[sql](ds: Dataset[T]) {
     assertNotPartitioned("jdbc")
     assertNotBucketed("jdbc")
     // connectionProperties should override settings in extraOptions.
-    this.extraOptions = this.extraOptions ++ connectionProperties.asScala
+    this.extraOptions ++= connectionProperties.asScala
     // explicit url and dbtable should override all
     this.extraOptions += ("url" -> url, "dbtable" -> table)
     format("jdbc").save()
@@ -587,7 +660,7 @@ final class DataFrameWriter[T] private[sql](ds: Dataset[T]) {
 
   private var mode: SaveMode = SaveMode.ErrorIfExists
 
-  private var extraOptions = new scala.collection.mutable.HashMap[String, String]
+  private val extraOptions = new scala.collection.mutable.HashMap[String, String]
 
   private var partitioningColumns: Option[Seq[String]] = None
 

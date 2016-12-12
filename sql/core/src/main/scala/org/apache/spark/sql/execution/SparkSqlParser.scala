@@ -383,9 +383,6 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
       bucketSpec = bucketSpec
     )
 
-    // Determine the storage mode.
-    val mode = if (ifNotExists) SaveMode.Ignore else SaveMode.ErrorIfExists
-
     if (ctx.query != null) {
       // Get the backing query.
       val query = plan(ctx.query)
@@ -400,7 +397,7 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
           "Schema may not be specified in a Create Table As Select (CTAS) statement",
           ctx)
       }
-      CreateTable(tableDesc, mode, Some(query))
+      CreateTable(tableDesc, ifNotExists, Some(query))
     } else {
       if (temp) {
         if (ifNotExists) {
@@ -411,7 +408,7 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
           "CREATE TEMPORARY VIEW ... USING ... instead")
         CreateTempViewUsing(table, schema, replace = true, global = false, provider, options)
       } else {
-        CreateTable(tableDesc, mode, None)
+        CreateTable(tableDesc, ifNotExists, None)
       }
     }
   }
@@ -1069,8 +1066,6 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
       properties = properties,
       comment = comment)
 
-    val mode = if (ifNotExists) SaveMode.Ignore else SaveMode.ErrorIfExists
-
     selectQuery match {
       case Some(q) =>
         // Hive does not allow to use a CTAS statement to create a partitioned table.
@@ -1097,11 +1092,11 @@ class SparkSqlAstBuilder(conf: SQLConf) extends AstBuilder {
           val newTableDesc = tableDesc.copy(
             storage = CatalogStorageFormat.empty.copy(locationUri = location),
             provider = Some(conf.defaultDataSourceName))
-          CreateTable(newTableDesc, mode, Some(q))
+          CreateTable(newTableDesc, ifNotExists, Some(q))
         } else {
-          CreateTable(tableDesc, mode, Some(q))
+          CreateTable(tableDesc, ifNotExists, Some(q))
         }
-      case None => CreateTable(tableDesc, mode, None)
+      case None => CreateTable(tableDesc, ifNotExists, None)
     }
   }
 

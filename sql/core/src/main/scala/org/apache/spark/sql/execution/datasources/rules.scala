@@ -97,7 +97,7 @@ case class AnalyzeCreateTable(sparkSession: SparkSession) extends Rule[LogicalPl
     //   * can't use all table columns as partition columns.
     //   * partition columns' type must be AtomicType.
     //   * sort columns' type must be orderable.
-    case c @ CreateTable(tableDesc, mode, query) =>
+    case c @ CreateTable(tableDesc, _, query) =>
       val analyzedQuery = query.map { q =>
         // Analyze the query in CTAS and then we can do the normalization and checking.
         val qe = sparkSession.sessionState.executePlan(q)
@@ -136,7 +136,6 @@ case class AnalyzeCreateTable(sparkSession: SparkSession) extends Rule[LogicalPl
       } else {
         failAnalysis("Cannot use all columns for partition columns")
       }
-
     }
 
     schema.filter(f => normalizedPartitionCols.contains(f.name)).map(_.dataType).foreach {
@@ -270,7 +269,7 @@ case class PreprocessTableInsertion(conf: SQLConf) extends Rule[LogicalPlan] {
   }
 
   def apply(plan: LogicalPlan): LogicalPlan = plan transform {
-    case i @ InsertIntoTable(table, partition, child, _, _) if table.resolved && child.resolved =>
+    case i @ InsertIntoTable(table, _, child, _, _) if table.resolved && child.resolved =>
       table match {
         case relation: CatalogRelation =>
           val metadata = relation.catalogTable
@@ -281,7 +280,7 @@ case class PreprocessTableInsertion(conf: SQLConf) extends Rule[LogicalPlan] {
         case LogicalRelation(_: InsertableRelation, _, catalogTable) =>
           val tblName = catalogTable.map(_.identifier.quotedString).getOrElse("unknown")
           preprocess(i, tblName, Nil)
-        case other => i
+        case _ => i
       }
   }
 }
@@ -311,27 +310,6 @@ case class PreWriteCheck(conf: SQLConf, catalog: SessionCatalog)
 
   def apply(plan: LogicalPlan): Unit = {
     plan.foreach {
-      case c @ CreateTable(tableDesc, mode, query) if c.resolved =>
-        if (query.isDefined &&
-          mode == SaveMode.Overwrite &&
-          catalog.tableExists(tableDesc.identifier)) {
-          // Need to remove SubQuery operator.
-          EliminateSubqueryAliases(catalog.lookupRelation(tableDesc.identifier)) match {
-            // Only do the check if the table is a data source table
-            // (the relation is a BaseRelation).
-            case LogicalRelation(dest: BaseRelation, _, _) =>
-              // Get all input data source relations of the query.
-              val srcRelations = query.get.collect {
-                case LogicalRelation(src: BaseRelation, _, _) => src
-              }
-              if (srcRelations.contains(dest)) {
-                failAnalysis(
-                  s"Cannot overwrite table ${tableDesc.identifier} that is also being read from")
-              }
-            case _ => // OK
-          }
-        }
-
       case logical.InsertIntoTable(
           l @ LogicalRelation(t: InsertableRelation, _, _), partition, query, _, _) =>
         // Right now, we do not support insert into a data source table with partition specs.

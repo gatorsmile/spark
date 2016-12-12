@@ -27,15 +27,9 @@ import org.apache.spark.sql.types._
 
 case class CreateTable(
     tableDesc: CatalogTable,
-    mode: SaveMode,
+    ignoreIfExists: Boolean,
     query: Option[LogicalPlan]) extends Command {
   assert(tableDesc.provider.isDefined, "The table to be created must have a provider.")
-
-  if (query.isEmpty) {
-    assert(
-      mode == SaveMode.ErrorIfExists || mode == SaveMode.Ignore,
-      "create table without data insertion can only use ErrorIfExists or Ignore as SaveMode.")
-  }
 
   override def innerChildren: Seq[QueryPlan[_]] = query.toSeq
 }
