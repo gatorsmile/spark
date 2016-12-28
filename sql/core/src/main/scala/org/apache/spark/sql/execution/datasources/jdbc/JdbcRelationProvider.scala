@@ -69,12 +69,13 @@ class JdbcRelationProvider extends CreatableRelationProvider
             if (isTruncate && isCascadingTruncateTable(url) == Some(false)) {
               // In this case, we should truncate table and then load.
               truncateTable(conn, table)
+              saveTable(df, url, table, tableSchema.get, isCaseSensitive, jdbcOptions)
             } else {
               // Otherwise, do not truncate the table, instead drop and recreate it
               dropTable(conn, table)
               createTable(df.schema, url, table, createTableOptions, conn)
+              saveTable(df, url, table, df.schema, isCaseSensitive, jdbcOptions)
             }
-            saveTable(df, url, table, tableSchema.get, isCaseSensitive, jdbcOptions)
 
           case SaveMode.Append =>
             saveTable(df, url, table, tableSchema.get, isCaseSensitive, jdbcOptions)
