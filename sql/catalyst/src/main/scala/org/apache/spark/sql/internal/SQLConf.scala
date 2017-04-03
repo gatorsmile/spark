@@ -720,6 +720,12 @@ object SQLConf {
       .checkValue(number => number > 0, "The maximum number must be a positive integer.")
       .createWithDefault(12)
 
+  val JOIN_REORDER_DP_STAR_FILTER =
+    buildConf("spark.sql.cbo.joinReorder.dp.star.filter")
+      .doc("Applies star-join filtering to join enumeration.")
+      .booleanConf
+      .createWithDefault(false)
+
   val JOIN_REORDER_CARD_WEIGHT =
     buildConf("spark.sql.cbo.joinReorder.card.weight")
       .internal()
@@ -999,6 +1005,8 @@ class SQLConf extends Serializable with Logging {
   def joinReorderEnabled: Boolean = getConf(SQLConf.JOIN_REORDER_ENABLED)
 
   def joinReorderDPThreshold: Int = getConf(SQLConf.JOIN_REORDER_DP_THRESHOLD)
+
+  def joinReorderDPStarFilter: Boolean = getConf(SQLConf.JOIN_REORDER_DP_STAR_FILTER)
 
   def joinReorderCardWeight: Double = getConf(SQLConf.JOIN_REORDER_CARD_WEIGHT)
 
