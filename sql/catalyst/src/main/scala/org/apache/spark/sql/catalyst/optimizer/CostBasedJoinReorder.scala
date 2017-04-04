@@ -148,11 +148,8 @@ case class JoinReorderDP(conf: SQLConf) extends PredicateHelper with Logging {
       case (item, id) => Set(id) -> JoinPlan(Set(id), item, Set(), Cost(0, 0))
     }.toMap)
 
-    // Build filters from the join graph to be used by the search algorithm.
-    val filters = JoinReorderDPFilters(conf).buildJoinGraphInfo(items, conditions) match {
-      case Some(f) => Some(f.mapToIntSet(itemIndex))
-      case None => None
-    }
+    // Build dynamic-programming filters from the join graph to be used by the search algorithm.
+    val filters = JoinReorderDPFilters(conf).buildJoinGraphInfo(items, conditions, itemIndex)
 
     // Build plans for next levels until the last level has only one plan. This plan contains
     // all items that can be joined, so there's no need to continue.
@@ -184,7 +181,7 @@ case class JoinReorderDP(conf: SQLConf) extends PredicateHelper with Logging {
       conf: SQLConf,
       conditions: Set[Expression],
       topOutput: AttributeSet,
-      filters: Option[JoinGraphInfoIntSets] = None): JoinPlanMap = {
+      filters: Option[JoinGraphInfo]): JoinPlanMap = {
 
     val nextLevel = mutable.Map.empty[Set[Int], JoinPlan]
     var k = 0
@@ -205,24 +202,15 @@ case class JoinReorderDP(conf: SQLConf) extends PredicateHelper with Logging {
         }
 
         otherSideCandidates.foreach { otherSidePlan =>
-          val isValidJoinCombination =
-            // Disjoint sets: mandatory filter
-            oneSidePlan.itemIds.intersect(otherSidePlan.itemIds).isEmpty &&
-            // Star-join: optional filter
-            (!conf.joinReorderDPStarFilter || filters.isEmpty || JoinReorderDPFilters(conf)
-              .starJoinFilter(oneSidePlan.itemIds, otherSidePlan.itemIds, filters.get))
-
-          if (isValidJoinCombination) {
-            buildJoin(oneSidePlan, otherSidePlan, conf, conditions, topOutput) match {
-              case Some(newJoinPlan) =>
-                // Check if it's the first plan for the item set, or it's a better plan than
-                // the existing one due to lower cost.
-                val existingPlan = nextLevel.get(newJoinPlan.itemIds)
-                if (existingPlan.isEmpty || newJoinPlan.betterThan(existingPlan.get, conf)) {
-                  nextLevel.update(newJoinPlan.itemIds, newJoinPlan)
-                }
-              case None =>
-            }
+          buildJoin(oneSidePlan, otherSidePlan, conf, conditions, topOutput, filters) match {
+            case Some(newJoinPlan) =>
+              // Check if it's the first plan for the item set, or it's a better plan than
+              // the existing one due to lower cost.
+              val existingPlan = nextLevel.get(newJoinPlan.itemIds)
+              if (existingPlan.isEmpty || newJoinPlan.betterThan(existingPlan.get, conf)) {
+                nextLevel.update(newJoinPlan.itemIds, newJoinPlan)
+              }
+            case None =>
           }
         }
       }
@@ -235,11 +223,13 @@ case class JoinReorderDP(conf: SQLConf) extends PredicateHelper with Logging {
    * Builds a new JoinPlan when both conditions hold:
    * - the sets of items contained in left and right sides do not overlap.
    * - there exists at least one join condition involving references from both sides.
+   * - todo(Ioana)
    * @param oneJoinPlan One side JoinPlan for building a new JoinPlan.
    * @param otherJoinPlan The other side JoinPlan for building a new join node.
    * @param conf SQLConf for statistics computation.
    * @param conditions The overall set of join conditions.
    * @param topOutput The output attributes of the final plan.
+   * @param filters TODO(Ioana)
    * @return Builds and returns a new JoinPlan if both conditions hold. Otherwise, returns None.
    */
   private def buildJoin(
@@ -247,7 +237,25 @@ case class JoinReorderDP(conf: SQLConf) extends PredicateHelper with Logging {
       otherJoinPlan: JoinPlan,
       conf: SQLConf,
       conditions: Set[Expression],
-      topOutput: AttributeSet): Option[JoinPlan] = {
+      topOutput: AttributeSet,
+      filters: Option[JoinGraphInfo]): Option[JoinPlan] = {
+
+    if (oneJoinPlan.itemIds.intersect(otherJoinPlan.itemIds).nonEmpty) {
+      // Should not join two overlapping item sets.
+      return None
+    }
+
+    if (conf.joinReorderDPStarFilter) {
+      // Given the outer/inner and the star/non-star sets, the allowed plan combinations:
+      // 1) (oneJoinPlan U otherJoinPlan) is a subset of star-join
+      // 2) star-join is a subset of (oneJoinPlan U otherJoinPlan)
+      // 3) (oneJoinPlan U otherJoinPlan) is a subset of non star-join
+      filters.foreach { f =>
+        val isValidJoinCombination =
+          JoinReorderDPFilters(conf).starJoinFilter(oneJoinPlan.itemIds, otherJoinPlan.itemIds, f)
+        if (!isValidJoinCombination) return None
+      }
+    }
 
     val onePlan = oneJoinPlan.plan
     val otherPlan = otherJoinPlan.plan
@@ -353,7 +361,8 @@ case class JoinReorderDPFilters(conf: SQLConf) extends PredicateHelper {
    */
   def buildJoinGraphInfo(
       items: Seq[LogicalPlan],
-      conditions: Set[Expression]): Option[JoinGraphInfo] = {
+      conditions: Set[Expression],
+      planIndex: Seq[(LogicalPlan, Int)]): Option[JoinGraphInfo] = {
 
     // Compute the tables in a star-schema relationship.
     val starJoin = StarSchemaDetection(conf).findStarJoins(items, conditions.toSeq)
@@ -363,7 +372,15 @@ case class JoinReorderDPFilters(conf: SQLConf) extends PredicateHelper {
     // To be used by Cartesian heuristics.
 
     if (starJoin.nonEmpty && nonStarJoin.nonEmpty) {
-      Some(JoinGraphInfo(starJoin, nonStarJoin))
+      val (starInt, nonStarInt) = planIndex.collect {
+        case (p, i) if starJoin.contains(p) =>
+          (Some(i), None)
+        case (p, i) if nonStarJoin.contains(p) =>
+          (None, Some(i))
+        case _ =>
+          (None, None)
+      }.unzip
+      Some(JoinGraphInfo(starInt.flatten.toSet, nonStarInt.flatten.toSet))
     } else {
       // Nothing interesting to return.
       None
@@ -391,7 +408,7 @@ case class JoinReorderDPFilters(conf: SQLConf) extends PredicateHelper {
   def starJoinFilter(
       outer: Set[Int],
       inner: Set[Int],
-      filters: JoinGraphInfoIntSets) : Boolean = {
+      filters: JoinGraphInfo) : Boolean = {
     val starJoins = filters.starJoins
     val nonStarJoins = filters.nonStarJoins
     val join = outer.union(inner)
@@ -412,25 +429,5 @@ case class JoinReorderDPFilters(conf: SQLConf) extends PredicateHelper {
   // e.g. Cartesian filtering, left-deep plans only, etc.
 }
 
-/** Helper class that keeps information about the join graph. */
-case class JoinGraphInfo (
-  starJoins: Seq[LogicalPlan],
-  nonStarJoins: Seq[LogicalPlan]) {
-
-  def mapToIntSet(planIndex: Seq[(LogicalPlan, Int)]): JoinGraphInfoIntSets = {
-    val (starInt, nonStarInt) = planIndex.collect {
-      case (p, i) if starJoins.contains(p) =>
-        (Some(i), None)
-      case (p, i) if nonStarJoins.contains(p) =>
-        (None, Some(i))
-      case _ =>
-        (None, None)
-    }.unzip
-    JoinGraphInfoIntSets(starInt.flatten.toSet, nonStarInt.flatten.toSet)
-  }
-}
-
 /** Helper class that keeps information about the join graph as int sets. */
-case class JoinGraphInfoIntSets (
-  starJoins: Set[Int],
-  nonStarJoins: Set[Int])
+case class JoinGraphInfo(starJoins: Set[Int], nonStarJoins: Set[Int])
