@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hive
 
+import java.util.Locale
+
 import scala.util.control.NonFatal
 
 import org.apache.hadoop.conf.Configuration
@@ -128,7 +130,7 @@ private[sql] class HiveSessionCatalog(
       // This function is not in functionRegistry, let's try to load it as a Hive's
       // built-in function.
       // Hive is case insensitive.
-      val functionName = funcName.unquotedString.toLowerCase
+      val functionName = funcName.unquotedString.toLowerCase(Locale.ROOT)
       if (!hiveFunctions.contains(functionName)) {
         failFunctionLookup(funcName.unquotedString)
       }
