@@ -990,6 +990,15 @@ class SessionCatalog(
     val newFuncDefinition = funcDefinition.copy(identifier = identifier)
     if (!functionExists(identifier)) {
       externalCatalog.createFunction(db, newFuncDefinition)
+      // We first load resources and then put the builder in the function registry.
+      loadFunctionResources(funcDefinition.resources)
+      val info = new ExpressionInfo(
+        funcDefinition.className,
+        identifier.database.orNull,
+        identifier.funcName)
+      val builder = makeFunctionBuilder(identifier.unquotedString, funcDefinition.className)
+      // Please note that it is not allowed to overwrite an existing temp function.
+      createTempFunction(identifier.unquotedString, info, builder, ignoreIfExists = false)
     } else if (!ignoreIfExists) {
       throw new FunctionAlreadyExistsException(db = db, func = identifier.toString)
     }
@@ -1051,7 +1060,7 @@ class SessionCatalog(
    */
   def makeFunctionBuilder(name: String, functionClassName: String): FunctionBuilder = {
     // TODO: at least support UDAFs here
-    throw new UnsupportedOperationException("Use sqlContext.udf.register(...) instead.")
+    throw new UnsupportedOperationException("Use sparkSession.udf.register(...) instead.")
   }
 
   /**
@@ -1071,7 +1080,7 @@ class SessionCatalog(
       info: ExpressionInfo,
       funcDefinition: FunctionBuilder,
       ignoreIfExists: Boolean): Unit = {
-    if (functionRegistry.lookupFunctionBuilder(name).isDefined && !ignoreIfExists) {
+    if (functionRegistry.functionExists(name) && !ignoreIfExists) {
       throw new TempFunctionAlreadyExistsException(name)
     }
     functionRegistry.registerFunction(name, info, funcDefinition)

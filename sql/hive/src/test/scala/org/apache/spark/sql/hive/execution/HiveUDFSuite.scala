@@ -558,6 +558,25 @@ class HiveUDFSuite extends QueryTest with TestHiveSingleton with SQLTestUtils {
       checkAnswer(testData.selectExpr("statelessUDF() as s").agg(max($"s")), Row(1))
     }
   }
+
+  test("SPARK-19840: Disallow creating permanent functions with invalid class names") {
+    withUserDefinedFunction("function_with_invalid_classname" -> false) {
+      val e = intercept[ClassNotFoundException] {
+        sql("CREATE FUNCTION function_with_invalid_classname AS 'org.invalid'")
+      }
+      assert(e.getMessage.contains("org.invalid"))
+    }
+  }
+
+  test("Disallow creating temp functions with invalid class names") {
+    withUserDefinedFunction("function_with_invalid_classname" -> true) {
+      val e = intercept[ClassNotFoundException] {
+        sql("CREATE TEMPORARY FUNCTION function_with_invalid_classname AS 'org.invalid'")
+      }
+      assert(e.getMessage.contains("org.invalid"))
+    }
+  }
+
 }
 
 class TestPair(x: Int, y: Int) extends Writable with Serializable {
