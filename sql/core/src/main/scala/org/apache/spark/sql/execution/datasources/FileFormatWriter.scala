@@ -351,7 +351,8 @@ object FileFormatWriter extends Logging {
         val partitionName = ScalaUDF(
           ExternalCatalogUtils.getPartitionPathString _,
           StringType,
-          Seq(Literal(c.name), Cast(c, StringType, Option(desc.timeZoneId))))
+          Seq(Literal(c.name), Cast(c, StringType, Option(desc.timeZoneId))),
+          udfDeterministic = true)
         if (i == 0) Seq(partitionName) else Seq(Literal(Path.SEPARATOR), partitionName)
       }
     }

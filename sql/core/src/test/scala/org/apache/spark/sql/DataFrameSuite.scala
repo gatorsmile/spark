@@ -537,6 +537,34 @@ class DataFrameSuite extends QueryTest with SharedSQLContext {
     )
   }
 
+  test("udf - nondeterministic") {
+    val foo = udf((a: Int, b: String) => a.toString + b).nonDeterministic()
+    checkAnswer(
+      testData.select($"*", foo('key, 'value)).limit(3),
+      Row(1, "1", "11") :: Row(2, "2", "22") :: Row(3, "3", "33") :: Nil
+    )
+
+    val foo1 = udf(udfMethod.funcUDF _).nonDeterministic().apply(col("key"))
+    checkAnswer(
+      testData.select($"*", foo1).limit(3),
+      Row(1, "1", 1) :: Row(2, "2", 2) :: Row(3, "3", 3) :: Nil)
+
+    val foo2 = udf[scala.Int, scala.Int] ((i: scala.Int) => i + 1, deterministic = false)
+    checkAnswer(
+      testData.select($"*", foo2('key)).limit(3),
+      Row(1, "1", 2) :: Row(2, "2", 3) :: Row(3, "3", 4) :: Nil)
+
+    val foo3 = udf((i: scala.Int) => i + 2, DataTypes.IntegerType, deterministic = false)
+    checkAnswer(
+      testData.select($"*", foo3('key)).limit(3),
+      Row(1, "1", 3) :: Row(2, "2", 4) :: Row(3, "3", 5) :: Nil)
+
+    spark.udf.register("foo4", deterministic = false, (i: scala.Int) => i + 3)
+    checkAnswer(
+      sql("SELECT *, foo4(value) FROM testData limit 3"),
+      Row(1, "1", 4) :: Row(2, "2", 5) :: Row(3, "3", 6) :: Nil)
+  }
+
   test("callUDF without Hive Support") {
     val df = Seq(("id1", 1), ("id2", 4), ("id3", 5)).toDF("id", "value")
     df.sparkSession.udf.register("simpleUDF", (v: Int) => v * v)
@@ -1384,7 +1412,7 @@ class DataFrameSuite extends QueryTest with SharedSQLContext {
 
     // passing null into the UDF that could handle it
     val boxedUDF = udf[java.lang.Integer, java.lang.Integer] {
-      (i: java.lang.Integer) => if (i == null) -10 else null
+      (i: java.lang.Integer) => (if (i == null) -10 else null): Integer
     }
     checkAnswer(df.select(boxedUDF($"age")), Row(null) :: Row(-10) :: Nil)
 
@@ -1722,4 +1750,9 @@ class DataFrameSuite extends QueryTest with SharedSQLContext {
         "Cannot have map type columns in DataFrame which calls set operations"))
     }
   }
+}
+
+
+object udfMethod {
+  def funcUDF(@transient i: Int): Int = i
 }

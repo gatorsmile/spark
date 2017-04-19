@@ -72,7 +72,7 @@ class DataFrameCallbackSuite extends QueryTest with SharedSQLContext {
     }
     spark.listenerManager.register(listener)
 
-    val errorUdf = udf[Int, Int] { _ => throw new RuntimeException("udf error") }
+    val errorUdf = udf[Int, Int] { _: Int => throw new RuntimeException("udf error") }
     val df = sparkContext.makeRDD(Seq(1 -> "a")).toDF("i", "j")
 
     val e = intercept[SparkException](df.select(errorUdf($"i")).collect())

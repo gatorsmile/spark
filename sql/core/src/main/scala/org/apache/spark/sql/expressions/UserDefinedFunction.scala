@@ -42,10 +42,11 @@ import org.apache.spark.sql.types.DataType
  * @since 1.3.0
  */
 @InterfaceStability.Stable
-case class UserDefinedFunction protected[sql] (
-    f: AnyRef,
-    dataType: DataType,
-    inputTypes: Option[Seq[DataType]]) {
+class UserDefinedFunction protected[sql] (
+    val f: AnyRef,
+    val dataType: DataType,
+    val inputTypes: Option[Seq[DataType]],
+    val deterministic: Boolean) {
 
   /**
    * Returns an expression that invokes the UDF, using the given arguments.
@@ -53,6 +54,32 @@ case class UserDefinedFunction protected[sql] (
    * @since 1.3.0
    */
   def apply(exprs: Column*): Column = {
-    Column(ScalaUDF(f, dataType, exprs.map(_.expr), inputTypes.getOrElse(Nil)))
+    Column(ScalaUDF(
+      f, dataType, exprs.map(_.expr), udfDeterministic = deterministic, inputTypes.getOrElse(Nil)))
   }
+
+  /**
+   * Updates the StructField with a new comment value.
+   */
+  def nonDeterministic(): UserDefinedFunction = {
+    new UserDefinedFunction(f, dataType, inputTypes, deterministic = false)
+  }
+}
+
+object UserDefinedFunction {
+  def apply(
+      f: AnyRef,
+      dataType: DataType,
+      inputTypes: Option[Seq[DataType]]): UserDefinedFunction =
+    new UserDefinedFunction(f, dataType, inputTypes, deterministic = true)
+
+  def apply(
+      f: AnyRef,
+      dataType: DataType,
+      inputTypes: Option[Seq[DataType]],
+      deterministic: Boolean): UserDefinedFunction =
+    new UserDefinedFunction(f, dataType, inputTypes, deterministic = true)
+
+  def unapply(u: UserDefinedFunction): Option[(AnyRef, DataType, Option[Seq[DataType]])] =
+    Some(u.f, u.dataType, u.inputTypes)
 }

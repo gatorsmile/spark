@@ -31,6 +31,8 @@ import org.apache.spark.sql.types.DataType
  *                  null. Use boxed type or [[Option]] if you wanna do the null-handling yourself.
  * @param dataType  Return type of function.
  * @param children  The input expressions of this UDF.
+ * @param udfDeterministic True if the UDF is deterministic. Deterministic UDF returns same result
+ *                         each time it is invoked with a particular input.
  * @param inputTypes  The expected input types of this UDF, used to perform type coercion. If we do
  *                    not want to perform coercion, simply use "Nil". Note that it would've been
  *                    better to use Option of Seq[DataType] so we can use "None" as the case for no
@@ -41,11 +43,14 @@ case class ScalaUDF(
     function: AnyRef,
     dataType: DataType,
     children: Seq[Expression],
+    udfDeterministic: Boolean,
     inputTypes: Seq[DataType] = Nil,
     udfName: Option[String] = None)
   extends Expression with ImplicitCastInputTypes with NonSQLExpression {
 
   override def nullable: Boolean = true
+
+  override def deterministic: Boolean = udfDeterministic && children.forall(_.deterministic)
 
   override def toString: String =
     s"${udfName.map(name => s"UDF:$name").getOrElse("UDF")}(${children.mkString(", ")})"
@@ -1076,5 +1081,14 @@ case class ScalaUDF(
     }
 
     converter(result)
+  }
+}
+
+object ScalaUDF {
+  def apply (
+    function: AnyRef,
+    dataType: DataType,
+    children: Seq[Expression]): ScalaUDF = {
+    ScalaUDF(function, dataType, children, udfDeterministic = true)
   }
 }
