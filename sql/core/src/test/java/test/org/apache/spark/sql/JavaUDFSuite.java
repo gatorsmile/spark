@@ -27,6 +27,7 @@ import org.junit.Test;
 
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
+import org.apache.spark.sql.api.java.UDF1;
 import org.apache.spark.sql.api.java.UDF2;
 import org.apache.spark.sql.types.DataTypes;
 
@@ -104,5 +105,32 @@ public class JavaUDFSuite implements Serializable {
       sum += result.getLong(0);
     }
     Assert.assertEquals(55, sum);
+  }
+
+  public static class randUDFTest implements UDF1<Integer, Double> {
+    @Override
+    public Double call(Integer i) {
+      return i + Math.random();
+    }
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  public void udf5Test() {
+    spark.udf().registerJava(
+        "randUDF", randUDFTest.class.getName(), DataTypes.DoubleType, false, false);
+
+    Row result = spark.sql("SELECT randUDF(1)").head();
+    Assert.assertTrue(result.getDouble(0) >= 0.0);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Test
+  public void udf6Test() {
+    spark.udf().register(
+        "randUDF", (Integer i) -> i + Math.random(), DataTypes.DoubleType, false, false);
+
+    Row result = spark.sql("SELECT randUDF(1)").head();
+    Assert.assertTrue(result.getDouble(0) >= 0.0);
   }
 }
