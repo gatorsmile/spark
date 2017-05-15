@@ -106,7 +106,7 @@ public class JavaUDFSuite implements Serializable {
     }
     Assert.assertEquals(55, sum);
     Assert.assertTrue("EXPLAIN outputs are expected to contain the UDF name.",
-        spark.sql("EXPLAIN SELECT inc(1) as f").collectAsList().toString().contains("inc"));
+        spark.sql("EXPLAIN SELECT inc(1) AS f").collectAsList().toString().contains("inc"));
   }
 
   public static class randUDFTest implements UDF1<Integer, Double> {
@@ -135,6 +135,6 @@ public class JavaUDFSuite implements Serializable {
     Row result = spark.sql("SELECT randUDF(1)").head();
     Assert.assertTrue(result.getDouble(0) >= 0.0);
     Assert.assertTrue("EXPLAIN outputs are expected to contain the UDF name.",
-        spark.sql("EXPLAIN SELECT randUDF(1) as r").collectAsList().toString().contains("randUDF"));
+        spark.sql("EXPLAIN SELECT randUDF(1) AS r").collectAsList().toString().contains("randUDF"));
   }
 }
