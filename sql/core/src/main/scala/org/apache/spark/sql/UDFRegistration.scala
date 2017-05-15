@@ -148,7 +148,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
          |  val func = f$anyCast.call($anyParams)
          |  functionRegistry.registerFunction(
          |    name,
-         |    (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+         |    (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
          |}
          |
          |/**
@@ -927,7 +927,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF1[Any, Any]].call(_: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -949,7 +949,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF2[Any, Any, Any]].call(_: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -971,7 +971,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF3[Any, Any, Any, Any]].call(_: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -993,7 +993,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF4[Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1015,7 +1015,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF5[Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1037,7 +1037,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF6[Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1059,7 +1059,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF7[Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1081,7 +1081,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF8[Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1103,7 +1103,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF9[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1125,7 +1125,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF10[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1147,7 +1147,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF11[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1169,7 +1169,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF12[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1191,7 +1191,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF13[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1213,7 +1213,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF14[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1235,7 +1235,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF15[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1257,7 +1257,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF16[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1279,7 +1279,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF17[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1301,7 +1301,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF18[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1323,7 +1323,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF19[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1345,7 +1345,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF20[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1367,7 +1367,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF21[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
@@ -1389,7 +1389,7 @@ class UDFRegistration private[sql] (functionRegistry: FunctionRegistry) extends 
     val func = f.asInstanceOf[UDF22[Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any, Any]].call(_: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any, _: Any)
     functionRegistry.registerFunction(
       name,
-      (e: Seq[Expression]) => ScalaUDF(func, returnType, e))
+      (e: Seq[Expression]) => ScalaUDF(func, returnType, e, inputTypes = Nil, udfName = Some(name)))
   }
 
   /**
