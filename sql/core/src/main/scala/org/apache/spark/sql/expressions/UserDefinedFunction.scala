@@ -94,8 +94,9 @@ case class UserDefinedFunction protected[sql] (
    * @since 2.3.0
    */
   def withName(name: String): this.type = {
-    this._nameOption = Option(name)
-    this
+    val udf = copyAll()
+    udf._nameOption = Option(name)
+    udf
   }
 
   /**
