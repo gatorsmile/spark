@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.catalyst.optimizer
 
+import org.scalatest.BeforeAndAfterAll
+
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, EmptyFunctionRegistry}
 import org.apache.spark.sql.catalyst.catalog.{InMemoryCatalog, SessionCatalog}
 import org.apache.spark.sql.catalyst.dsl.expressions._
@@ -28,10 +30,30 @@ import org.apache.spark.sql.catalyst.rules.RuleExecutor
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.{CASE_SENSITIVE, GROUP_BY_ORDINAL}
 
-class AggregateOptimizeSuite extends PlanTest {
+class AggregateOptimizeSuite extends PlanTest with BeforeAndAfterAll {
   override val conf = new SQLConf().copy(CASE_SENSITIVE -> false, GROUP_BY_ORDINAL -> false)
   val catalog = new SessionCatalog(new InMemoryCatalog, EmptyFunctionRegistry, conf)
   val analyzer = new Analyzer(catalog, conf)
+
+  var originalConfCaseSensitive = false
+  var originalConfGroupByOrdinal = false
+
+  override def beforeAll(): Unit = {
+    super.beforeAll()
+    originalConfCaseSensitive = SQLConf.get.caseSensitiveAnalysis
+    originalConfGroupByOrdinal = SQLConf.get.groupByOrdinal
+    SQLConf.get.setConf(CASE_SENSITIVE, false)
+    SQLConf.get.setConf(GROUP_BY_ORDINAL, false)
+  }
+
+  override def afterAll(): Unit = {
+    try {
+      SQLConf.get.setConf(CASE_SENSITIVE, originalConfCaseSensitive)
+      SQLConf.get.setConf(GROUP_BY_ORDINAL, originalConfGroupByOrdinal)
+    } finally {
+      super.afterAll()
+    }
+  }
 
   object Optimize extends RuleExecutor[LogicalPlan] {
     val batches = Batch("Aggregate", FixedPoint(100),

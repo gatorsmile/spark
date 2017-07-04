@@ -168,9 +168,9 @@ object HiveAnalysis extends Rule[LogicalPlan] {
  * This rule must be run before all other DDL post-hoc resolution rules, i.e.
  * `PreprocessTableCreation`, `PreprocessTableInsertion`, `DataSourceAnalysis` and `HiveAnalysis`.
  */
-case class RelationConversions(
-    conf: SQLConf,
-    sessionCatalog: HiveSessionCatalog) extends Rule[LogicalPlan] {
+case class RelationConversions(sessionCatalog: HiveSessionCatalog) extends Rule[LogicalPlan] {
+  val conf = SQLConf.get
+
   private def isConvertible(relation: CatalogRelation): Boolean = {
     val serde = relation.tableMeta.storage.serde.getOrElse("").toLowerCase(Locale.ROOT)
     serde.contains("parquet") && conf.getConf(HiveUtils.CONVERT_METASTORE_PARQUET) ||

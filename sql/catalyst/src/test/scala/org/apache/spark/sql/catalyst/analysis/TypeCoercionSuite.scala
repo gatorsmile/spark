@@ -899,7 +899,7 @@ class TypeCoercionSuite extends AnalysisTest {
     }
   }
 
-  private val timeZoneResolver = ResolveTimeZone(new SQLConf)
+  private val timeZoneResolver = ResolveTimeZone
 
   private def widenSetOperationTypes(plan: LogicalPlan): LogicalPlan = {
     timeZoneResolver(TypeCoercion.WidenSetOperationTypes(plan))

@@ -47,7 +47,7 @@ import org.apache.spark.sql.internal.SQLConf
  * This should be only done after the batch of Resolution, because the view attributes are not
  * completely resolved during the batch of Resolution.
  */
-case class AliasViewChild(conf: SQLConf) extends Rule[LogicalPlan] with CastSupport {
+object AliasViewChild extends Rule[LogicalPlan] with CastSupport {
   override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperators {
     case v @ View(desc, output, child) if child.resolved && output != child.output =>
       val resolver = conf.resolver

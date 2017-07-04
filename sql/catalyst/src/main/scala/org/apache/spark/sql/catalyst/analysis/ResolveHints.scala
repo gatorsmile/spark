@@ -46,10 +46,10 @@ object ResolveHints {
    *
    * This rule must happen before common table expressions.
    */
-  class ResolveBroadcastHints(conf: SQLConf) extends Rule[LogicalPlan] {
+  object ResolveBroadcastHints extends Rule[LogicalPlan] {
     private val BROADCAST_HINT_NAMES = Set("BROADCAST", "BROADCASTJOIN", "MAPJOIN")
 
-    def resolver: Resolver = conf.resolver
+    def resolver: Resolver = SQLConf.get.resolver
 
     private def applyBroadcastHint(plan: LogicalPlan, toBroadcast: Set[String]): LogicalPlan = {
       // Whether to continue recursing down the tree
