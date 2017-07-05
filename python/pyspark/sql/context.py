@@ -214,13 +214,14 @@ class SQLContext(object):
 
         In addition to a name and the function itself, the return type can be optionally specified.
         When the return type is not specified we would infer it via reflection.
-        :param name:  name of the UDF
-        :param javaClassName: fully qualified name of java class
-        :param returnType: a :class:`pyspark.sql.types.DataType` object
-        :param deterministic: A flag indicating if the UDF is deterministic. Deterministic UDF
-                              returns same result each time it is invoked with a particular input.
+
+        :param name: name of the UDF.
+        :param javaClassName: fully qualified name of java class.
+        :param returnType: a :class:`pyspark.sql.types.DataType` object.
+        :param deterministic: a flag indicating if the UDF is deterministic.  Deterministic UDF
+            returns same result each time it is invoked with a particular input.
         :param distinctLike: a UDF is considered distinctLike if the UDF can be evaluated on just
-                             the distinct values of a column.
+            the distinct values of a column.
 
         >>> sqlContext.registerJavaFunction("javaStringLength",
         ...   "test.org.apache.spark.sql.JavaStringLength", IntegerType())
