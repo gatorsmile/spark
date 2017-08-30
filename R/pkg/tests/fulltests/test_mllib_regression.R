@@ -23,8 +23,6 @@ context("MLlib regression algorithms, except for tree-based algorithms")
 sparkSession <- sparkR.session(master = sparkRTestMaster, enableHiveSupport = FALSE)
 
 test_that("formula of spark.glm", {
-  skip_on_cran()
-
   training <- suppressWarnings(createDataFrame(iris))
   # directly calling the spark API
   # dot minus and intercept vs native glm
@@ -175,6 +173,14 @@ test_that("spark.glm summary", {
   expect_equal(stats$df.residual, rStats$df.residual)
   expect_equal(stats$aic, rStats$aic)
 
+  # Test spark.glm works with offset
+  training <- suppressWarnings(createDataFrame(iris))
+  stats <- summary(spark.glm(training, Sepal_Width ~ Sepal_Length + Species,
+                             family = poisson(), offsetCol = "Petal_Length"))
+  rStats <- suppressWarnings(summary(glm(Sepal.Width ~ Sepal.Length + Species,
+                        data = iris, family = poisson(), offset = iris$Petal.Length)))
+  expect_true(all(abs(rStats$coefficients - stats$coefficients) < 1e-3))
+
   # Test summary works on base GLM models
   baseModel <- stats::glm(Sepal.Width ~ Sepal.Length + Species, data = iris)
   baseSummary <- summary(baseModel)
@@ -197,8 +203,6 @@ test_that("spark.glm summary", {
 })
 
 test_that("spark.glm save/load", {
-  skip_on_cran()
-
   training <- suppressWarnings(createDataFrame(iris))
   m <- spark.glm(training, Sepal_Width ~ Sepal_Length + Species)
   s <- summary(m)
@@ -226,8 +230,6 @@ test_that("spark.glm save/load", {
 })
 
 test_that("formula of glm", {
-  skip_on_cran()
-
   training <- suppressWarnings(createDataFrame(iris))
   # dot minus and intercept vs native glm
   model <- glm(Sepal_Width ~ . - Species + 0, data = training)
@@ -254,8 +256,6 @@ test_that("formula of glm", {
 })
 
 test_that("glm and predict", {
-  skip_on_cran()
-
   training <- suppressWarnings(createDataFrame(iris))
   # gaussian family
   model <- glm(Sepal_Width ~ Sepal_Length + Species, data = training)
@@ -300,8 +300,6 @@ test_that("glm and predict", {
 })
 
 test_that("glm summary", {
-  skip_on_cran()
-
   # gaussian family
   training <- suppressWarnings(createDataFrame(iris))
   stats <- summary(glm(Sepal_Width ~ Sepal_Length + Species, data = training))
@@ -351,8 +349,6 @@ test_that("glm summary", {
 })
 
 test_that("glm save/load", {
-  skip_on_cran()
-
   training <- suppressWarnings(createDataFrame(iris))
   m <- glm(Sepal_Width ~ Sepal_Length + Species, data = training)
   s <- summary(m)
@@ -379,6 +375,49 @@ test_that("glm save/load", {
   unlink(modelPath)
 })
 
+test_that("spark.glm and glm with string encoding", {
+  t <- as.data.frame(Titanic, stringsAsFactors = FALSE)
+  df <- createDataFrame(t)
+
+  # base R
+  rm <- stats::glm(Freq ~ Sex + Age, family = "gaussian", data = t)
+  # spark.glm with default stringIndexerOrderType = "frequencyDesc"
+  sm0 <- spark.glm(df, Freq ~ Sex + Age, family = "gaussian")
+  # spark.glm with stringIndexerOrderType = "alphabetDesc"
+  sm1 <- spark.glm(df, Freq ~ Sex + Age, family = "gaussian",
+                   stringIndexerOrderType = "alphabetDesc")
+  # glm with stringIndexerOrderType = "alphabetDesc"
+  sm2 <- glm(Freq ~ Sex + Age, family = "gaussian", data = df,
+                stringIndexerOrderType = "alphabetDesc")
+
+  rStats <- summary(rm)
+  rCoefs <- rStats$coefficients
+  sStats <- lapply(list(sm0, sm1, sm2), summary)
+  # order by coefficient size since column rendering may be different
+  o <- order(rCoefs[, 1])
+
+  # default encoding does not produce same results as R
+  expect_false(all(abs(rCoefs[o, ] - sStats[[1]]$coefficients[o, ]) < 1e-4))
+
+  # all estimates should be the same as R with stringIndexerOrderType = "alphabetDesc"
+  test <- lapply(sStats[2:3], function(stats) {
+    expect_true(all(abs(rCoefs[o, ] - stats$coefficients[o, ]) < 1e-4))
+    expect_equal(stats$dispersion, rStats$dispersion)
+    expect_equal(stats$null.deviance, rStats$null.deviance)
+    expect_equal(stats$deviance, rStats$deviance)
+    expect_equal(stats$df.null, rStats$df.null)
+    expect_equal(stats$df.residual, rStats$df.residual)
+    expect_equal(stats$aic, rStats$aic)
+  })
+
+  # fitted values should be equal regardless of string encoding
+  rVals <- predict(rm, t)
+  test <- lapply(list(sm0, sm1, sm2), function(sm) {
+    vals <- collect(select(predict(sm, df), "prediction"))
+    expect_true(all(abs(rVals - vals) < 1e-6), rVals - vals)
+  })
+})
+
 test_that("spark.isoreg", {
   label <- c(7.0, 5.0, 3.0, 5.0, 1.0)
   feature <- c(0.0, 1.0, 2.0, 3.0, 4.0)
@@ -401,7 +440,7 @@ test_that("spark.isoreg", {
   expect_equal(predict_result$prediction, c(7.0, 7.0, 6.0, 5.5, 5.0, 4.0, 1.0))
 
   # Test model save/load
-  if (not_cran_or_windows_with_hadoop()) {
+  if (windows_with_hadoop()) {
     modelPath <- tempfile(pattern = "spark-isoreg", fileext = ".tmp")
     write.ml(model, modelPath)
     expect_error(write.ml(model, modelPath))
@@ -452,7 +491,7 @@ test_that("spark.survreg", {
                2.390146, 2.891269, 2.891269), tolerance = 1e-4)
 
   # Test model save/load
-  if (not_cran_or_windows_with_hadoop()) {
+  if (windows_with_hadoop()) {
     modelPath <- tempfile(pattern = "spark-survreg", fileext = ".tmp")
     write.ml(model, modelPath)
     expect_error(write.ml(model, modelPath))
@@ -474,6 +513,25 @@ test_that("spark.survreg", {
       model <- survival::survreg(formula = survival::Surv(time, status) ~ x + sex, data = rData),
                                  NA)
     expect_equal(predict(model, rData)[[1]], 3.724591, tolerance = 1e-4)
+
+    # Test stringIndexerOrderType
+    rData <- as.data.frame(rData)
+    rData$sex2 <- c("female", "male")[rData$sex + 1]
+    df <- createDataFrame(rData)
+    expect_error(
+      rModel <- survival::survreg(survival::Surv(time, status) ~ x + sex2, rData), NA)
+    rCoefs <- as.numeric(summary(rModel)$table[, 1])
+    model <- spark.survreg(df, Surv(time, status) ~ x + sex2)
+    coefs <- as.vector(summary(model)$coefficients[, 1])
+    o <- order(rCoefs)
+    # stringIndexerOrderType = "frequencyDesc" produces different estimates from R
+    expect_false(all(abs(rCoefs[o] - coefs[o]) < 1e-4))
+
+    # stringIndexerOrderType = "alphabetDesc" produces the same estimates as R
+    model <- spark.survreg(df, Surv(time, status) ~ x + sex2,
+                           stringIndexerOrderType = "alphabetDesc")
+    coefs <- as.vector(summary(model)$coefficients[, 1])
+    expect_true(all(abs(rCoefs[o] - coefs[o]) < 1e-4))
   }
 })
 
