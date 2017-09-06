@@ -40,6 +40,49 @@ abstract class Optimizer(sessionCatalog: SessionCatalog)
   protected def fixedPoint = FixedPoint(SQLConf.get.optimizerMaxIterations)
 
   def batches: Seq[Batch] = {
+
+    val commonOperatorOptimizationRuleBatch =
+      Seq(
+        // Operator combine
+        CollapseRepartition,
+        CollapseProject,
+        CollapseWindow,
+        CombineFilters,
+        CombineLimits,
+        CombineUnions,
+        // Constant folding and strength reduction
+        NullPropagation,
+        ConstantPropagation,
+        FoldablePropagation,
+        OptimizeIn,
+        ConstantFolding,
+        ReorderAssociativeOperator,
+        LikeSimplification,
+        BooleanSimplification,
+        SimplifyConditionals,
+        RemoveDispensableExpressions,
+        SimplifyBinaryComparison,
+        EliminateSorts,
+        SimplifyCasts,
+        SimplifyCaseConversionExpressions,
+        RewriteCorrelatedScalarSubquery,
+        EliminateSerialization,
+        RemoveRedundantAliases,
+        RemoveRedundantProject,
+        SimplifyCreateStructOps,
+        SimplifyCreateArrayOps,
+        SimplifyCreateMapOps,
+        CombineConcats,
+        // Operator push down
+        PushProjectionThroughUnion,
+        ReorderJoin,
+        EliminateOuterJoin,
+        PushPredicateThroughJoin,
+        PushDownPredicate,
+        LimitPushDown,
+        ColumnPruning) ++
+        extendedOperatorOptimizationRules
+
     Batch("Eliminate Distinct", Once, EliminateDistinct) ::
     // Technically some of the rules in Finish Analysis are not optimizer rules and belong more
     // in the analyzer, because they are needed for correctness (e.g. ComputeCurrentTime).
@@ -74,49 +117,12 @@ abstract class Optimizer(sessionCatalog: SessionCatalog)
     Batch("Aggregate", fixedPoint,
       RemoveLiteralFromGroupExpressions,
       RemoveRepetitionFromGroupExpressions) ::
-    Batch("Operator Optimizations", fixedPoint, Seq(
-      // Operator push down
-      PushProjectionThroughUnion,
-      ReorderJoin,
-      EliminateOuterJoin,
-      InferFiltersFromConstraints,
-      BooleanSimplification,
-      PushPredicateThroughJoin,
-      PushDownPredicate,
-      LimitPushDown,
-      ColumnPruning,
-      // Operator combine
-      CollapseRepartition,
-      CollapseProject,
-      CollapseWindow,
-      CombineFilters,
-      CombineLimits,
-      CombineUnions,
-      // Constant folding and strength reduction
-      NullPropagation,
-      ConstantPropagation,
-      FoldablePropagation,
-      OptimizeIn,
-      ConstantFolding,
-      ReorderAssociativeOperator,
-      LikeSimplification,
-      BooleanSimplification,
-      SimplifyConditionals,
-      RemoveDispensableExpressions,
-      SimplifyBinaryComparison,
-      PruneFilters,
-      EliminateSorts,
-      SimplifyCasts,
-      SimplifyCaseConversionExpressions,
-      RewriteCorrelatedScalarSubquery,
-      EliminateSerialization,
-      RemoveRedundantAliases,
-      RemoveRedundantProject,
-      SimplifyCreateStructOps,
-      SimplifyCreateArrayOps,
-      SimplifyCreateMapOps,
-      CombineConcats) ++
-      extendedOperatorOptimizationRules: _*) ::
+    Batch("Operator Optimizations with Filter Inference", fixedPoint, Seq(
+      InferFiltersFromConstraints) ++
+      commonOperatorOptimizationRuleBatch: _*) ::
+    Batch("Operator Optimizations with Filter Removal", fixedPoint, Seq(
+      PruneFilters) ++
+      commonOperatorOptimizationRuleBatch: _*) ::
     Batch("Check Cartesian Products", Once,
       CheckCartesianProducts) ::
     Batch("Join Reorder", Once,
