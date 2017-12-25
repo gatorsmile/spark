@@ -68,7 +68,7 @@ object ParquetOptions {
   val MERGE_SCHEMA = "mergeSchema"
 
   // The parquet compression short names
-  private val shortParquetCompressionCodecNames = Map(
+  val shortParquetCompressionCodecNames = Map(
     "none" -> CompressionCodecName.UNCOMPRESSED,
     "uncompressed" -> CompressionCodecName.UNCOMPRESSED,
     "snappy" -> CompressionCodecName.SNAPPY,
