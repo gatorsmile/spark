@@ -2298,7 +2298,8 @@ class SQLConf extends Serializable with Logging {
 
   /**
    * Return the `string` value of Spark SQL configuration property for the given key. If the key is
-   * not set yet, return `defaultValue`.
+   * not set yet, return `defaultValue`. Note that `defaultValue` overrides the default value of
+   * the ConfigEntry.
    */
   def getConfString(key: String, defaultValue: String): String = {
     if (defaultValue != null && defaultValue != ConfigEntry.UNDEFINED) {
